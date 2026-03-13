@@ -674,9 +674,9 @@ canvas { display:none; }
         style="flex:1;padding:10px;border-radius:6px;border:1.5px solid rgba(255,255,255,0.3);background:transparent;color:white;font-size:13px;font-weight:700;font-family:'Noto Sans TC',sans-serif;cursor:pointer">
         ☐ 選擇
       </button>
-      <button onclick="pvDownload()"
+      <button onclick="pvShare()"
         style="flex:1;padding:10px;border-radius:6px;border:none;background:rgba(255,255,255,0.15);color:white;font-size:13px;font-weight:700;font-family:'Noto Sans TC',sans-serif;cursor:pointer">
-        ⬇ 下載
+        📤 分享
       </button>
       <button onclick="pvDelete()"
         style="flex:1;padding:10px;border-radius:6px;border:none;background:rgba(212,43,43,0.7);color:white;font-size:13px;font-weight:700;font-family:'Noto Sans TC',sans-serif;cursor:pointer">
@@ -1425,7 +1425,7 @@ function renderFiles() {
       <div class="file-actions">
         <button class="btn btn-outline btn-sm" onclick="previewFile(${f.id},[${allIds}])">👁 預覽</button>
         <button class="btn btn-blue btn-sm" onclick="openRename(${f.id})" style="background:var(--blue);color:white">✏️ 重命名</button>
-        <button class="btn btn-outline btn-sm" onclick="downloadFile(${f.id})">⬇</button>
+        <button class="btn btn-outline btn-sm" onclick="shareFile(${f.id})">📤</button>
         <button class="btn btn-danger btn-sm" onclick="deleteFile(${f.id})">🗑</button>
       </div>
     </div>`).join('');
@@ -1547,8 +1547,24 @@ function pvToggleSelect() {
   showToast(f.selected ? '☑ 已加入選擇' : '☐ 已取消選擇');
 }
 
-function pvDownload() {
-  downloadFile(_pvList[_pvIndex]);
+async function pvShare() {
+  const id = _pvList[_pvIndex];
+  const f = S.files.find(x => x.id === id);
+  if (!f || !f.blob) return;
+  const file = new File([f.blob], f.filename, { type: f.blob.type || (f.type === 'audio' ? 'audio/mpeg' : 'image/jpeg') });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try {
+      await navigator.share({ files: [file], title: f.filename });
+      return;
+    } catch(e) {
+      if (e.name === 'AbortError') return;
+    }
+  }
+  // Fallback: download
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(f.blob);
+  a.download = f.filename; a.click();
+  showToast('⬇ 已下載：' + f.filename);
 }
 
 function pvDelete() {
@@ -1573,6 +1589,25 @@ function downloadFile(id) {
   a.href = URL.createObjectURL(f.blob);
   a.download = f.filename; a.click();
   showToast('⬇ 下載：' + f.filename);
+}
+
+async function shareFile(id) {
+  const f = S.files.find(x => x.id === id);
+  if (!f || !f.blob) return;
+  const file = new File([f.blob], f.filename, { type: f.blob.type || (f.type === 'audio' ? 'audio/mpeg' : 'image/jpeg') });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try {
+      await navigator.share({ files: [file], title: f.filename });
+      return;
+    } catch(e) {
+      if (e.name === 'AbortError') return;
+    }
+  }
+  // Fallback: download
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(f.blob);
+  a.download = f.filename; a.click();
+  showToast('⬇ 已下載：' + f.filename);
 }
 
 function deleteFile(id) {
