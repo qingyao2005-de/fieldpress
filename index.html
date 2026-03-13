@@ -690,15 +690,19 @@ canvas { display:none; }
 <div class="modal-overlay" id="renameModal">
   <div class="modal">
     <div class="modal-handle"></div>
-    <div class="section-title">重新命名</div>
+    <div class="section-title">✏️ 重新命名</div>
     <input type="hidden" id="renameFileId">
-    <div class="rename-fields" id="renameFields"></div>
-    <div style="margin-bottom:8px">
-      <div style="font-size:10px;font-family:'IBM Plex Mono',monospace;color:var(--muted);margin-bottom:4px">新文件名預覽</div>
-      <div class="rename-preview" id="renamePreview">—</div>
+    <div style="margin-bottom:14px">
+      <div style="font-size:10px;font-family:'IBM Plex Mono',monospace;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">文件名（含擴展名）</div>
+      <input type="text" id="renameInput"
+        style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:6px;font-size:13px;font-family:'IBM Plex Mono',monospace;background:var(--card);box-sizing:border-box"
+        oninput="updateRenamePreview()">
     </div>
+    <button class="btn btn-outline btn-full" onclick="stripTrailingNumber()" style="margin-bottom:14px;font-size:13px">
+      ✂️ 去掉末尾序號
+    </button>
     <div class="btn-row">
-      <button class="btn btn-success" onclick="confirmRename()">✅ 確認重命名</button>
+      <button class="btn btn-success" onclick="confirmRename()">✅ 確認</button>
       <button class="btn btn-outline" onclick="closeModal('renameModal')">取消</button>
     </div>
   </div>
@@ -1517,68 +1521,78 @@ function buildRenameData() {
 }
 
 function openRename(id) {
-  const f = S.files.find(x=>x.id===id);
+  const f = S.files.find(x => x.id === id);
   if (!f) return;
   document.getElementById('renameFileId').value = id;
-  const d = f.renameData || buildRenameData();
-  const ext = f.type==='audio' ? '.mp3' : '.jpg';
-  const fields = [
-    { key:'seq', label:'序號', val: d.seq },
-    { key:'date', label:'日期', val: d.date },
-    { key:'showTime', label:'演出時間', val: d.showTime },
-    { key:'city', label:'城市', val: d.city },
-    { key:'reporter', label:'記者名', val: d.reporter },
-    { key:'subjectName', label:'被採訪者', val: d.subjectName },
-    { key:'subjectJob', label:'職業', val: d.subjectJob },
-    { key:'custom', label:'自定義名（屏蔽2-5）', val: d.custom }
-  ];
-  document.getElementById('renameFields').innerHTML = fields.map(fi => `
-    <div class="rename-field">
-      <label>${fi.label}</label>
-      <input type="text" id="rf-${fi.key}" value="${fi.val||''}" oninput="updateRenamePreview('${ext}')">
-    </div>`).join('');
-  updateRenamePreview(ext);
+  document.getElementById('renameInput').value = f.filename;
   document.getElementById('renameModal').classList.add('show');
+  // Select all text for quick editing
+  setTimeout(() => {
+    const inp = document.getElementById('renameInput');
+    inp.focus();
+    // Select name part without extension
+    const dot = inp.value.lastIndexOf('.');
+    inp.setSelectionRange(0, dot > 0 ? dot : inp.value.length);
+  }, 120);
 }
 
-function updateRenamePreview(ext) {
-  const seq = clean(document.getElementById('rf-seq')?.value||'001') || '001';
-  const custom = document.getElementById('rf-custom')?.value||'';
-  let parts = [seq];
-  if (custom) {
-    parts.push(clean(custom));
+function updateRenamePreview() {
+  // nothing needed — input is the live value
+}
+
+function stripTrailingNumber() {
+  const id = parseInt(document.getElementById('renameFileId').value);
+  const inp = document.getElementById('renameInput');
+  let name = inp.value;
+
+  // Split extension
+  const dot = name.lastIndexOf('.');
+  const ext = dot > 0 ? name.slice(dot) : '';
+  let base = dot > 0 ? name.slice(0, dot) : name;
+
+  // Find and remove trailing -N or _N
+  const match = base.match(/^(.*)([-_])(\d+)$/);
+  if (!match) { showToast('⚠ 末尾沒有序號'); return; }
+  const strippedBase = match[1];
+  const sep = match[2];
+  const num = match[3];
+  const newName = strippedBase + ext;
+
+  // Check for conflict with another file
+  const conflict = S.files.find(f => f.id !== id && f.filename === newName);
+  if (conflict) {
+    // Restore the conflicting file's name by appending its old suffix back
+    // Find a suffix that doesn't conflict
+    let suffix = parseInt(num) || 1;
+    let candidate;
+    do {
+      candidate = strippedBase + sep + suffix + ext;
+      suffix++;
+    } while (S.files.some(f => f.id !== id && f.id !== conflict.id && f.filename === candidate));
+    conflict.filename = candidate;
+    renderFiles();
+    renderRecFiles();
+    renderPhotoThumbs();
+    showToast(`✂️ 已去序號，「${conflict.filename.slice(0,28)}…」已重新編號`);
   } else {
-    parts.push(document.getElementById('rf-date')?.value||'');
-    const st = document.getElementById('rf-showTime')?.value||'';
-    if (st) parts.push(clean(st));
-    parts.push(clean(document.getElementById('rf-city')?.value||''));
-    parts.push(clean(document.getElementById('rf-reporter')?.value||''));
+    showToast('✂️ 已去掉末尾序號');
   }
-  const sn = document.getElementById('rf-subjectName')?.value||'';
-  const sj = document.getElementById('rf-subjectJob')?.value||'';
-  if (sn) parts.push(clean(sn));
-  if (sj) parts.push(clean(sj));
-  document.getElementById('renamePreview').textContent = parts.join('-') + ext;
+
+  inp.value = newName;
+  inp.focus();
 }
 
 function confirmRename() {
   const id = parseInt(document.getElementById('renameFileId').value);
-  const f = S.files.find(x=>x.id===id);
+  const f = S.files.find(x => x.id === id);
   if (!f) return;
-  const newName = document.getElementById('renamePreview').textContent;
+  const newName = document.getElementById('renameInput').value.trim();
+  if (!newName) { showToast('⚠ 文件名不能為空'); return; }
   f.filename = newName;
-  f.renameData = {
-    seq: document.getElementById('rf-seq')?.value||'',
-    date: document.getElementById('rf-date')?.value||'',
-    showTime: document.getElementById('rf-showTime')?.value||'',
-    city: document.getElementById('rf-city')?.value||'',
-    reporter: document.getElementById('rf-reporter')?.value||'',
-    subjectName: document.getElementById('rf-subjectName')?.value||'',
-    subjectJob: document.getElementById('rf-subjectJob')?.value||'',
-    custom: document.getElementById('rf-custom')?.value||''
-  };
   closeModal('renameModal');
   renderFiles();
+  renderRecFiles();
+  renderPhotoThumbs();
   showToast('✅ 已重命名：' + newName);
 }
 
