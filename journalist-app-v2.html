@@ -1,0 +1,1017 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>FieldPress v2</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+TC:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --ink: #0a0a0a; --paper: #f5f0e8; --red: #d42b2b; --amber: #e8a020;
+  --green: #1a7a4a; --steel: #2a2f3a; --muted: #8a8070; --border: #d0c8b8;
+  --card: #fdfaf4; --blue: #1a5fa8;
+}
+* { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+body { background:var(--paper); color:var(--ink); font-family:'Noto Sans TC',sans-serif; min-height:100vh; overflow-x:hidden; }
+
+/* NEXT INTERVIEW BTN */
+.next-interview-bar {
+  background: var(--red);
+  padding: 10px 16px;
+  position: sticky; top: 0; z-index: 99;
+}
+.next-interview-btn {
+  width: 100%; padding: 13px; border: none; border-radius: 6px;
+  background: var(--ink); color: white;
+  font-family: 'Bebas Neue', sans-serif; font-size: 22px; letter-spacing: 2px;
+  cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px;
+  transition: opacity 0.15s;
+}
+.next-interview-btn:active { opacity: 0.85; }
+
+/* HEADER */
+header {
+  background: var(--ink); padding: 10px 16px 8px;
+  display: flex; align-items: center; justify-content: space-between;
+  border-bottom: 3px solid var(--red);
+}
+.logo { font-family:'Bebas Neue',sans-serif; font-size:26px; color:var(--paper); letter-spacing:2px; }
+.logo span { color:var(--red); }
+.date-badge { font-family:'IBM Plex Mono',monospace; font-size:10px; color:var(--muted); text-align:right; line-height:1.4; }
+
+/* TABS */
+.tabs { display:flex; background:var(--steel); border-bottom:2px solid var(--red); }
+.tab { flex:1; padding:10px 4px; text-align:center; font-size:11px; font-weight:500; color:#888; cursor:pointer; transition:all 0.2s; border:none; background:none; font-family:'Noto Sans TC',sans-serif; }
+.tab.active { color:var(--paper); border-bottom:2px solid var(--amber); }
+.tab-icon { font-size:16px; display:block; margin-bottom:2px; }
+
+/* PANEL */
+.panel { display:none; padding:14px 14px 80px; }
+.panel.active { display:block; }
+
+/* SECTION TITLE */
+.section-title { font-family:'Bebas Neue',sans-serif; font-size:18px; letter-spacing:1px; color:var(--steel); border-left:4px solid var(--red); padding-left:10px; margin-bottom:12px; }
+
+/* FORM */
+.form-group { margin-bottom:12px; }
+.form-row { display:flex; gap:8px; margin-bottom:12px; }
+.form-row .form-group { flex:1; margin-bottom:0; }
+.form-group label { display:block; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:1px; color:var(--muted); margin-bottom:4px; font-family:'IBM Plex Mono',monospace; }
+.form-group label .optional { color:#bbb; font-weight:400; text-transform:none; letter-spacing:0; }
+.form-group input, .form-group select {
+  width:100%; padding:9px 11px; border:1.5px solid var(--border); background:var(--card);
+  border-radius:4px; font-size:14px; font-family:'Noto Sans TC',sans-serif; color:var(--ink); outline:none; transition:border-color 0.2s;
+}
+.form-group input:focus, .form-group select:focus { border-color:var(--steel); }
+.form-group input.optional-field { background:#faf8f2; }
+
+/* PREVIEW BOX */
+.preview-box { background:var(--ink); border-radius:6px; padding:12px 14px; margin-bottom:14px; }
+.preview-label { font-family:'IBM Plex Mono',monospace; font-size:10px; color:var(--muted); text-transform:uppercase; margin-bottom:5px; }
+.preview-name { font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--amber); word-break:break-all; line-height:1.6; }
+
+/* BUTTONS */
+.btn { flex:1; padding:12px 10px; border:none; border-radius:6px; font-size:14px; font-weight:700; font-family:'Noto Sans TC',sans-serif; cursor:pointer; transition:all 0.15s; display:flex; align-items:center; justify-content:center; gap:6px; }
+.btn-primary { background:var(--steel); color:var(--paper); }
+.btn-primary:active { background:var(--ink); transform:scale(0.97); }
+.btn-danger { background:var(--red); color:white; }
+.btn-danger:active { opacity:0.85; transform:scale(0.97); }
+.btn-success { background:var(--green); color:white; }
+.btn-amber { background:var(--amber); color:var(--ink); }
+.btn-outline { background:transparent; border:1.5px solid var(--border); color:var(--ink); }
+.btn-blue { background:var(--blue); color:white; }
+.btn-sm { padding:7px 12px; font-size:12px; border-radius:4px; }
+.btn-full { width:100%; }
+.btn-row { display:flex; gap:8px; }
+
+/* RECORD */
+.rec-status-bar {
+  background:var(--card); border:1.5px solid var(--border); border-radius:6px;
+  padding:12px 14px; margin-bottom:14px;
+}
+.rec-filename-display {
+  font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--ink);
+  word-break:break-all; line-height:1.5; margin-bottom:6px;
+}
+.rec-status-badge {
+  display:inline-block; padding:3px 10px; border-radius:20px; font-size:11px;
+  font-family:'IBM Plex Mono',monospace; font-weight:500;
+}
+.status-recording { background:#ffeaea; color:var(--red); }
+.status-paused { background:#fff8e0; color:#b07800; }
+.status-done { background:#e6f4ec; color:var(--green); }
+.status-idle { background:#f0f0f0; color:var(--muted); }
+
+.timer { font-family:'Bebas Neue',sans-serif; font-size:52px; letter-spacing:4px; color:var(--steel); text-align:center; margin:10px 0 6px; }
+.timer.active { color:var(--red); }
+
+.waveform { height:36px; display:flex; align-items:center; justify-content:center; gap:2px; margin-bottom:14px; }
+
+.quality-bar { display:flex; gap:6px; margin-bottom:16px; }
+.quality-opt { flex:1; padding:8px 4px; border-radius:5px; background:var(--card); border:1.5px solid var(--border); text-align:center; cursor:pointer; transition:all 0.2s; font-size:11px; font-weight:700; font-family:'IBM Plex Mono',monospace; color:var(--muted); }
+.quality-opt.selected { border-color:var(--amber); color:var(--amber); background:#fff9ed; }
+
+.rec-files-list { margin-top:14px; }
+.rec-file-item {
+  display:flex; align-items:center; gap:10px;
+  background:var(--card); border:1.5px solid var(--border); border-radius:5px;
+  padding:9px 12px; margin-bottom:8px;
+}
+.rec-file-name { flex:1; font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--ink); word-break:break-all; line-height:1.4; }
+.rec-file-meta { font-size:10px; color:var(--muted); margin-top:2px; }
+.rec-file-del { color:var(--red); font-size:18px; cursor:pointer; padding:4px; flex-shrink:0; }
+
+/* PHOTO */
+.flash-toggle { display:flex; align-items:center; gap:8px; margin-bottom:12px; }
+.flash-label { font-size:12px; font-family:'IBM Plex Mono',monospace; color:var(--muted); }
+.toggle-switch { position:relative; width:44px; height:24px; flex-shrink:0; }
+.toggle-switch input { opacity:0; width:0; height:0; }
+.toggle-slider { position:absolute; cursor:pointer; inset:0; background:#ccc; border-radius:24px; transition:.3s; }
+.toggle-slider:before { position:absolute; content:""; height:18px; width:18px; left:3px; bottom:3px; background:white; border-radius:50%; transition:.3s; }
+input:checked + .toggle-slider { background:var(--amber); }
+input:checked + .toggle-slider:before { transform:translateX(20px); }
+
+.camera-area { background:var(--ink); border-radius:8px; overflow:hidden; margin-bottom:12px; position:relative; min-height:200px; display:flex; align-items:center; justify-content:center; }
+#preview-video, #preview-img { width:100%; max-height:260px; object-fit:cover; display:block; }
+.camera-placeholder { color:#555; text-align:center; padding:36px 20px; }
+.camera-placeholder .cp-icon { font-size:44px; }
+.camera-placeholder p { font-size:13px; margin-top:8px; }
+
+.photo-filename-bar { background:var(--ink); border-radius:5px; padding:8px 12px; margin-bottom:12px; }
+.photo-filename-text { font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--amber); word-break:break-all; }
+
+.photo-thumb-list { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
+.photo-thumb { position:relative; width:calc(33.33% - 6px); aspect-ratio:1; }
+.photo-thumb img { width:100%; height:100%; object-fit:cover; border-radius:5px; border:2px solid var(--border); }
+.photo-thumb .thumb-del { position:absolute; top:2px; right:2px; background:rgba(0,0,0,0.7); color:white; border-radius:50%; width:20px; height:20px; display:flex; align-items:center; justify-content:center; font-size:12px; cursor:pointer; }
+.photo-thumb .thumb-num { position:absolute; bottom:2px; left:4px; background:rgba(0,0,0,0.6); color:white; font-size:10px; font-family:'IBM Plex Mono',monospace; padding:1px 5px; border-radius:3px; }
+
+/* FILES */
+.file-item { background:var(--card); border:1.5px solid var(--border); border-radius:6px; padding:11px 13px; margin-bottom:10px; }
+.file-item-top { display:flex; align-items:flex-start; gap:10px; }
+.file-type-icon { font-size:26px; flex-shrink:0; }
+.file-info { flex:1; min-width:0; }
+.file-name { font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--ink); word-break:break-all; line-height:1.4; font-weight:500; }
+.file-meta { font-size:11px; color:var(--muted); margin-top:3px; }
+.file-actions { display:flex; gap:6px; margin-top:8px; }
+.file-check { width:22px; height:22px; accent-color:var(--steel); cursor:pointer; flex-shrink:0; margin-top:2px; }
+
+.rename-panel { background:#f0ede6; border-radius:6px; padding:12px; margin-top:10px; display:none; }
+.rename-panel.show { display:block; }
+.rename-fields { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:8px; }
+.rename-field label { font-size:10px; font-family:'IBM Plex Mono',monospace; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; display:block; margin-bottom:3px; }
+.rename-field input { width:100%; padding:7px 9px; border:1.5px solid var(--border); border-radius:4px; font-size:12px; background:white; font-family:'Noto Sans TC',sans-serif; }
+.rename-preview { font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--blue); word-break:break-all; background:white; padding:8px 10px; border-radius:4px; border:1px solid var(--border); margin-bottom:8px; line-height:1.5; }
+
+/* SYNC */
+.sync-bar { background:var(--ink); border-radius:8px; padding:14px 16px; margin-bottom:14px; }
+.sync-bar-title { font-family:'Bebas Neue',sans-serif; font-size:16px; color:var(--paper); margin-bottom:10px; letter-spacing:1px; }
+.sync-options { display:flex; gap:8px; margin-bottom:10px; }
+.sync-opt { flex:1; padding:8px 4px; border-radius:5px; background:#1e1e1e; border:1.5px solid #333; text-align:center; cursor:pointer; transition:all 0.2s; color:#999; font-size:11px; font-weight:500; }
+.sync-opt.selected { border-color:var(--amber); color:var(--amber); background:#1a1500; }
+.sync-opt-icon { font-size:18px; display:block; margin-bottom:3px; }
+.progress-bar { background:#1e1e1e; border-radius:4px; height:6px; overflow:hidden; margin-bottom:6px; }
+.progress-fill { height:100%; background:linear-gradient(90deg,var(--amber),var(--green)); border-radius:4px; width:0%; transition:width 0.4s ease; }
+.progress-text { font-family:'IBM Plex Mono',monospace; font-size:10px; color:var(--muted); text-align:right; }
+
+/* MODAL */
+.modal-overlay { display:none; position:fixed; inset:0; background:rgba(10,10,10,0.75); z-index:300; align-items:flex-end; }
+.modal-overlay.show { display:flex; }
+.modal { background:var(--paper); border-radius:16px 16px 0 0; padding:18px 18px 36px; width:100%; max-height:85vh; overflow-y:auto; animation:slideUp 0.3s ease; }
+@keyframes slideUp { from{transform:translateY(100%)} to{transform:translateY(0)} }
+.modal-handle { width:40px; height:4px; background:var(--border); border-radius:4px; margin:0 auto 14px; }
+
+/* PREVIEW MODAL */
+.preview-modal-body { background:var(--ink); border-radius:8px; overflow:hidden; margin-bottom:14px; min-height:200px; display:flex; align-items:center; justify-content:center; }
+.preview-modal-body img { max-width:100%; max-height:60vh; object-fit:contain; }
+.preview-modal-body audio { width:100%; padding:20px; }
+
+/* TOAST */
+.toast { position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(80px); background:var(--ink); color:var(--paper); padding:11px 18px; border-radius:30px; font-size:12px; font-family:'IBM Plex Mono',monospace; z-index:999; transition:transform 0.3s ease; border-left:3px solid var(--amber); white-space:nowrap; max-width:90vw; overflow:hidden; text-overflow:ellipsis; }
+.toast.show { transform:translateX(-50%) translateY(0); }
+
+/* CONFIRM DIALOG */
+.confirm-overlay { display:none; position:fixed; inset:0; background:rgba(10,10,10,0.75); z-index:400; align-items:center; justify-content:center; padding:20px; }
+.confirm-overlay.show { display:flex; }
+.confirm-box { background:var(--paper); border-radius:12px; padding:20px; width:100%; max-width:320px; }
+.confirm-title { font-family:'Bebas Neue',sans-serif; font-size:20px; margin-bottom:8px; }
+.confirm-msg { font-size:13px; color:var(--muted); line-height:1.6; margin-bottom:16px; }
+
+canvas { display:none; }
+</style>
+</head>
+<body>
+
+<!-- STICKY NEXT INTERVIEW -->
+<div class="next-interview-bar">
+  <button class="next-interview-btn" onclick="startNextInterview()">
+    ▶ 開始下一個採訪
+  </button>
+</div>
+
+<header>
+  <div class="logo">Field<span>Press</span></div>
+  <div class="date-badge" id="headerDate"></div>
+</header>
+
+<div class="tabs">
+  <button class="tab active" onclick="switchTab('setup')"><span class="tab-icon">📋</span>設置</button>
+  <button class="tab" onclick="switchTab('record')"><span class="tab-icon">🎙</span>錄音</button>
+  <button class="tab" onclick="switchTab('photo')"><span class="tab-icon">📸</span>拍照</button>
+  <button class="tab" onclick="switchTab('files')"><span class="tab-icon">🗂</span>檔案</button>
+</div>
+
+<!-- ═══ SETUP ═══ -->
+<div class="panel active" id="panel-setup">
+  <div class="section-title">採訪設置</div>
+
+  <div class="form-row">
+    <div class="form-group">
+      <label>採訪序號</label>
+      <input type="number" id="interviewSeq" value="1" min="1" oninput="updatePreviews()">
+    </div>
+    <div class="form-group">
+      <label>日期（自動）</label>
+      <input type="text" id="interviewDate" readonly style="background:#f0ede6;color:var(--muted)">
+    </div>
+  </div>
+
+  <div class="form-group">
+    <label>演出時間 <span class="optional">（可選，如 3pm）</span></label>
+    <input type="text" id="showTime" placeholder="例：3pm、19:30" class="optional-field" oninput="updatePreviews()">
+  </div>
+  <div class="form-group">
+    <label>城市名稱</label>
+    <input type="text" id="cityName" placeholder="例：Hong Kong、Tokyo" oninput="updatePreviews()">
+  </div>
+  <div class="form-group">
+    <label>記者名</label>
+    <input type="text" id="reporterName" placeholder="例：ChanMing" oninput="updatePreviews()">
+  </div>
+  <div class="form-group">
+    <label>被採訪者姓名 <span class="optional">（可選）</span></label>
+    <input type="text" id="subjectName" placeholder="例：John Doe" class="optional-field" oninput="updatePreviews()">
+  </div>
+  <div class="form-group">
+    <label>被採訪者職業 <span class="optional">（可選）</span></label>
+    <input type="text" id="subjectJob" placeholder="例：Singer、CEO" class="optional-field" oninput="updatePreviews()">
+  </div>
+
+  <div style="background:#fff8e0;border:1.5px solid var(--amber);border-radius:6px;padding:10px 12px;margin-bottom:12px">
+    <div style="font-size:10px;font-family:'IBM Plex Mono',monospace;color:#b07800;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">⚡ 自定義文件名（填寫後屏蔽日期/演出時間/城市/記者名）</div>
+    <input type="text" id="customName" placeholder="例：Backstage-Interview" oninput="updatePreviews()" style="width:100%;padding:8px 10px;border:1.5px solid #e8d090;border-radius:4px;font-size:13px;font-family:'Noto Sans TC',sans-serif;background:white">
+  </div>
+
+  <div class="preview-box">
+    <div class="preview-label">📁 當前採訪文件名前綴</div>
+    <div class="preview-name" id="namePreview">—</div>
+    <div class="preview-label" style="margin-top:8px">🎙 錄音示例</div>
+    <div class="preview-name" id="audioPreview">—</div>
+    <div class="preview-label" style="margin-top:8px">📷 照片示例</div>
+    <div class="preview-name" id="photoPreview">—</div>
+  </div>
+
+  <button class="btn btn-primary btn-full" onclick="saveSetup()">✅ 確認設置</button>
+</div>
+
+<!-- ═══ RECORD ═══ -->
+<div class="panel" id="panel-record">
+  <div class="section-title">錄音</div>
+
+  <!-- Quality -->
+  <div class="quality-bar">
+    <div class="quality-opt selected" onclick="setQuality('high',this)">HIGH<br><span style="font-size:9px;font-weight:400">最高質量</span></div>
+    <div class="quality-opt" onclick="setQuality('mid',this)">MID<br><span style="font-size:9px;font-weight:400">平衡</span></div>
+    <div class="quality-opt" onclick="setQuality('low',this)">LOW<br><span style="font-size:9px;font-weight:400">節省空間</span></div>
+  </div>
+
+  <!-- Current file status -->
+  <div class="rec-status-bar" id="recStatusBar">
+    <div class="rec-filename-display" id="recFilenameDisplay">尚未開始錄音</div>
+    <span class="rec-status-badge status-idle" id="recStatusBadge">待機</span>
+  </div>
+
+  <div class="timer" id="timer">00:00:00</div>
+  <div class="waveform" id="waveform">
+    <span style="font-size:11px;color:var(--muted);font-family:'IBM Plex Mono',monospace">等待錄音…</span>
+  </div>
+
+  <!-- Controls -->
+  <div class="btn-row" style="margin-bottom:10px">
+    <button class="btn btn-success" id="btnStart" onclick="startRecording()">▶ 開始</button>
+    <button class="btn btn-amber" id="btnPause" onclick="togglePause()" disabled style="opacity:0.4">⏸ 暫停</button>
+    <button class="btn btn-danger" id="btnStop" onclick="stopRecording()" disabled style="opacity:0.4">⏹ 結束</button>
+  </div>
+  <button class="btn btn-outline btn-full btn-sm" id="btnDelCurrent" onclick="deleteCurrentRec()" style="margin-bottom:14px;display:none">🗑 刪除當前錄音</button>
+
+  <!-- Recordings for this interview -->
+  <div id="recFilesList" class="rec-files-list"></div>
+</div>
+
+<!-- ═══ PHOTO ═══ -->
+<div class="panel" id="panel-photo">
+  <div class="section-title">拍照</div>
+
+  <div class="flash-toggle">
+    <label class="toggle-switch">
+      <input type="checkbox" id="flashToggle" checked>
+      <span class="toggle-slider"></span>
+    </label>
+    <span class="flash-label">⚡ 閃光燈（預設開啟）</span>
+  </div>
+
+  <div class="photo-filename-bar">
+    <div style="font-size:10px;font-family:'IBM Plex Mono',monospace;color:var(--muted);margin-bottom:3px">當前採訪文件名前綴</div>
+    <div class="photo-filename-text" id="photoFilenameBar">—</div>
+  </div>
+
+  <div class="camera-area" id="cameraArea">
+    <div class="camera-placeholder" id="cameraPlaceholder">
+      <div class="cp-icon">📷</div>
+      <p>點擊「相機」開始拍攝<br>照片以臨時序號命名</p>
+    </div>
+    <video id="preview-video" autoplay playsinline style="display:none"></video>
+    <img id="preview-img" style="display:none;width:100%;max-height:260px;object-fit:cover">
+  </div>
+
+  <div class="btn-row" style="margin-bottom:12px">
+    <button class="btn btn-primary" onclick="startCamera()">📷 相機</button>
+    <button class="btn btn-outline" onclick="document.getElementById('fileInput').click()">🖼 相冊</button>
+    <button class="btn btn-danger" id="captureBtn" onclick="capturePhoto()" style="display:none">⚡ 拍攝</button>
+  </div>
+
+  <div class="photo-thumb-list" id="photoThumbList"></div>
+  <input type="file" id="fileInput" accept="image/*" style="display:none" onchange="handleFileInput(event)">
+  <canvas id="photoCanvas"></canvas>
+</div>
+
+<!-- ═══ FILES ═══ -->
+<div class="panel" id="panel-files">
+  <div class="sync-bar">
+    <div class="sync-bar-title">☁ 雲端同步</div>
+    <div class="sync-options">
+      <div class="sync-opt selected" id="opt-gdrive" onclick="selectSync('gdrive')"><span class="sync-opt-icon">🔵</span>Google Drive</div>
+      <div class="sync-opt" id="opt-dropbox" onclick="selectSync('dropbox')"><span class="sync-opt-icon">📦</span>Dropbox</div>
+      <div class="sync-opt" id="opt-local" onclick="selectSync('local')"><span class="sync-opt-icon">💾</span>本機下載</div>
+    </div>
+    <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+    <div class="progress-text" id="progressText">就緒</div>
+    <button class="btn btn-amber btn-full" style="margin-top:10px" onclick="syncSelected()">⬆ 同步所選檔案</button>
+  </div>
+
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+    <div class="section-title" style="margin:0">採訪檔案</div>
+    <div style="display:flex;gap:6px;align-items:center">
+      <span style="font-size:11px;font-family:'IBM Plex Mono',monospace;color:var(--muted)" id="fileCount">0 個</span>
+      <button class="btn btn-outline btn-sm" onclick="toggleSelectAll()" style="padding:5px 10px;font-size:11px">全選</button>
+    </div>
+  </div>
+
+  <div id="fileList"></div>
+</div>
+
+<!-- PREVIEW MODAL -->
+<div class="modal-overlay" id="previewModal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="section-title" id="previewModalTitle">預覽</div>
+    <div class="preview-modal-body" id="previewModalBody"></div>
+    <button class="btn btn-outline btn-full" onclick="closeModal('previewModal')">關閉</button>
+  </div>
+</div>
+
+<!-- RENAME MODAL -->
+<div class="modal-overlay" id="renameModal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="section-title">重新命名</div>
+    <input type="hidden" id="renameFileId">
+    <div class="rename-fields" id="renameFields"></div>
+    <div style="margin-bottom:8px">
+      <div style="font-size:10px;font-family:'IBM Plex Mono',monospace;color:var(--muted);margin-bottom:4px">新文件名預覽</div>
+      <div class="rename-preview" id="renamePreview">—</div>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-success" onclick="confirmRename()">✅ 確認重命名</button>
+      <button class="btn btn-outline" onclick="closeModal('renameModal')">取消</button>
+    </div>
+  </div>
+</div>
+
+<!-- CONFIRM DIALOG -->
+<div class="confirm-overlay" id="confirmOverlay">
+  <div class="confirm-box">
+    <div class="confirm-title" id="confirmTitle">確認</div>
+    <div class="confirm-msg" id="confirmMsg"></div>
+    <div class="btn-row">
+      <button class="btn btn-danger" id="confirmOkBtn">確認刪除</button>
+      <button class="btn btn-outline" onclick="closeConfirm()">取消</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════
+const S = {
+  setup: { seq:1, date:'', showTime:'', city:'', reporter:'', subjectName:'', subjectJob:'', custom:'' },
+  settingChanged: true,
+  audioCount: 0,
+  photoCount: 0,
+  files: [],
+  recording: { active:false, paused:false, mediaRecorder:null, chunks:[], seconds:0, timer:null, stream:null, sessionCount:0, currentBlob:null, quality:'high' },
+  camera: { stream:null, capturedBlob:null },
+  syncTarget: 'gdrive',
+  cloudConnected: false,
+  confirmCallback: null
+};
+
+// ═══════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════
+window.onload = () => {
+  const now = new Date();
+  const pad = n => String(n).padStart(2,'0');
+  S.setup.date = `${now.getFullYear()}${pad(now.getMonth()+1)}${pad(now.getDate())}`;
+  document.getElementById('interviewDate').value = S.setup.date;
+  document.getElementById('headerDate').innerHTML =
+    now.toLocaleDateString('zh-TW',{month:'long',day:'numeric'}) + '<br>' +
+    now.toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit'});
+  updatePreviews();
+  renderFiles();
+};
+
+// ═══════════════════════════════════════
+// TABS
+// ═══════════════════════════════════════
+function switchTab(name) {
+  ['setup','record','photo','files'].forEach((t,i) => {
+    document.querySelectorAll('.tab')[i].classList.toggle('active', t === name);
+    document.getElementById('panel-'+t).classList.toggle('active', t === name);
+  });
+  if (name==='record') updateRecordPanel();
+  if (name==='photo') updatePhotoPanel();
+  if (name==='files') renderFiles();
+}
+
+// ═══════════════════════════════════════
+// NAMING
+// ═══════════════════════════════════════
+function clean(s) { return (s||'').trim().replace(/[\s\/\\'"]/g,'_'); }
+
+function buildPrefix() {
+  const s = S.setup;
+  const seq = String(s.seq);
+  let parts = [seq];
+  if (s.custom) {
+    parts.push(clean(s.custom));
+  } else {
+    parts.push(s.date);
+    if (s.showTime) parts.push(clean(s.showTime));
+    parts.push(clean(s.city)||'CITY');
+    parts.push(clean(s.reporter)||'REPORTER');
+  }
+  if (s.subjectName) parts.push(clean(s.subjectName));
+  if (s.subjectJob) parts.push(clean(s.subjectJob));
+  return parts.join('-');
+}
+
+function updatePreviews() {
+  const seq = parseInt(document.getElementById('interviewSeq').value) || 1;
+  S.setup.seq = seq;
+  S.setup.showTime = document.getElementById('showTime').value;
+  S.setup.city = document.getElementById('cityName').value;
+  S.setup.reporter = document.getElementById('reporterName').value;
+  S.setup.subjectName = document.getElementById('subjectName').value;
+  S.setup.subjectJob = document.getElementById('subjectJob').value;
+  S.setup.custom = document.getElementById('customName').value;
+  const prefix = buildPrefix();
+  document.getElementById('namePreview').textContent = prefix;
+  document.getElementById('audioPreview').textContent = prefix + '.mp3';
+  document.getElementById('photoPreview').textContent = prefix + '-1.jpg';
+}
+
+function saveSetup() {
+  if (!S.setup.custom && !S.setup.city) { showToast('⚠ 請填寫城市名稱（或自定義文件名）'); return; }
+  if (!S.setup.custom && !S.setup.reporter) { showToast('⚠ 請填寫記者名'); return; }
+  S.settingChanged = true;
+  showToast('✅ 設置已儲存');
+}
+
+// ═══════════════════════════════════════
+// NEXT INTERVIEW
+// ═══════════════════════════════════════
+function startNextInterview() {
+  // Auto-stop any active recording
+  if (S.recording.active) {
+    stopRecording(true);
+    showToast('⏹ 上一個錄音已自動保存');
+  }
+  // Increment seq only if setting wasn't just changed
+  if (!S.settingChanged) {
+    S.setup.seq++;
+    document.getElementById('interviewSeq').value = S.setup.seq;
+    updatePreviews();
+  }
+  S.settingChanged = false;
+  S.recording.sessionCount = 0;
+  S.audioCount = 0;
+  S.photoCount = 0;
+  switchTab('record');
+  showToast('🎙 採訪 #' + S.setup.seq + ' 開始！');
+}
+
+// ═══════════════════════════════════════
+// RECORD
+// ═══════════════════════════════════════
+function updateRecordPanel() {
+  renderRecFiles();
+}
+
+function setQuality(q, el) {
+  S.recording.quality = q;
+  document.querySelectorAll('.quality-opt').forEach(e => e.classList.remove('selected'));
+  el.classList.add('selected');
+}
+
+function getBitrate() {
+  return { high: 128000, mid: 64000, low: 32000 }[S.recording.quality];
+}
+
+async function startRecording() {
+  if (S.recording.active) return;
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    S.recording.stream = stream;
+    S.recording.chunks = [];
+    S.recording.sessionCount++;
+    S.recording.seconds = 0;
+
+    const options = {};
+    if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) options.mimeType = 'audio/webm;codecs=opus';
+    S.recording.mediaRecorder = new MediaRecorder(stream, options);
+    S.recording.mediaRecorder.ondataavailable = e => S.recording.chunks.push(e.data);
+    S.recording.mediaRecorder.onstop = saveRecording;
+    S.recording.mediaRecorder.start(100);
+    S.recording.active = true;
+    S.recording.paused = false;
+
+    document.getElementById('btnStart').disabled = true;
+    document.getElementById('btnStart').style.opacity = '0.4';
+    document.getElementById('btnPause').disabled = false;
+    document.getElementById('btnPause').style.opacity = '1';
+    document.getElementById('btnStop').disabled = false;
+    document.getElementById('btnStop').style.opacity = '1';
+    document.getElementById('btnDelCurrent').style.display = 'flex';
+
+    S.recording.timer = setInterval(() => {
+      S.recording.seconds++;
+      document.getElementById('timer').textContent = formatTime(S.recording.seconds);
+      document.getElementById('timer').classList.add('active');
+      animateWave();
+    }, 1000);
+
+    updateRecStatus('recording');
+    showToast('🎙 錄音已開始');
+  } catch(e) {
+    showToast('❌ 無法訪問麥克風');
+  }
+}
+
+function togglePause() {
+  if (!S.recording.mediaRecorder) return;
+  if (S.recording.paused) {
+    S.recording.mediaRecorder.resume();
+    S.recording.paused = false;
+    document.getElementById('btnPause').innerHTML = '⏸ 暫停';
+    document.getElementById('btnStart').innerHTML = '▶ 開始';
+    S.recording.timer = setInterval(() => {
+      S.recording.seconds++;
+      document.getElementById('timer').textContent = formatTime(S.recording.seconds);
+      animateWave();
+    }, 1000);
+    updateRecStatus('recording');
+    showToast('▶ 繼續錄音');
+  } else {
+    S.recording.mediaRecorder.pause();
+    S.recording.paused = true;
+    clearInterval(S.recording.timer);
+    document.getElementById('btnPause').innerHTML = '▶ 繼續';
+    document.getElementById('btnStart').innerHTML = '▶ 繼續';
+    document.getElementById('waveform').innerHTML = '<span style="font-size:11px;color:var(--amber);font-family:\'IBM Plex Mono\',monospace">⏸ 已暫停</span>';
+    updateRecStatus('paused');
+    showToast('⏸ 已暫停');
+  }
+}
+
+function stopRecording(silent) {
+  if (!S.recording.mediaRecorder) return;
+  S.recording.mediaRecorder.stop();
+  if (S.recording.stream) S.recording.stream.getTracks().forEach(t => t.stop());
+  clearInterval(S.recording.timer);
+  S.recording.active = false;
+  S.recording.paused = false;
+
+  document.getElementById('btnStart').disabled = false;
+  document.getElementById('btnStart').style.opacity = '1';
+  document.getElementById('btnStart').innerHTML = '▶ 開始';
+  document.getElementById('btnPause').disabled = true;
+  document.getElementById('btnPause').style.opacity = '0.4';
+  document.getElementById('btnPause').innerHTML = '⏸ 暫停';
+  document.getElementById('btnStop').disabled = true;
+  document.getElementById('btnStop').style.opacity = '0.4';
+  document.getElementById('timer').classList.remove('active');
+  document.getElementById('waveform').innerHTML = '<span style="font-size:11px;color:var(--muted);font-family:\'IBM Plex Mono\',monospace">等待錄音…</span>';
+  if (!silent) showToast('⏹ 錄音已停止，正在保存…');
+}
+
+function saveRecording() {
+  const blob = new Blob(S.recording.chunks, { type: 'audio/webm' });
+  const prefix = buildPrefix();
+  const count = S.recording.sessionCount;
+  const filename = count === 1 ? prefix + '.mp3' : prefix + '-' + count + '.mp3';
+  const duration = S.recording.seconds;
+
+  S.files.unshift({
+    id: Date.now(), type: 'audio', filename, blob,
+    size: blob.size, duration, synced: false,
+    timestamp: new Date().toLocaleTimeString('zh-TW'),
+    interviewPrefix: prefix, sessionNum: count,
+    renameData: buildRenameData()
+  });
+  S.recording.currentBlob = null;
+  S.recording.seconds = 0;
+  document.getElementById('timer').textContent = '00:00:00';
+  document.getElementById('btnDelCurrent').style.display = 'none';
+  updateRecStatus('done', filename);
+  renderRecFiles();
+  renderFiles();
+}
+
+function updateRecStatus(status, filename) {
+  const prefix = buildPrefix();
+  const count = S.recording.sessionCount;
+  const fname = filename || (count === 1 ? prefix + '.mp3' : prefix + '-' + count + '.mp3');
+  document.getElementById('recFilenameDisplay').textContent = fname;
+  const badge = document.getElementById('recStatusBadge');
+  badge.className = 'rec-status-badge';
+  if (status==='recording') { badge.classList.add('status-recording'); badge.textContent='● 正在錄音'; }
+  else if (status==='paused') { badge.classList.add('status-paused'); badge.textContent='⏸ 暫停'; }
+  else if (status==='done') { badge.classList.add('status-done'); badge.textContent='✓ 完成'; }
+  else { badge.classList.add('status-idle'); badge.textContent='待機'; }
+}
+
+function deleteCurrentRec() {
+  showConfirm('刪除當前錄音', '確定要刪除當前正在錄音的文件嗎？此操作無法撤銷。', () => {
+    if (S.recording.mediaRecorder) {
+      S.recording.mediaRecorder.ondataavailable = null;
+      S.recording.mediaRecorder.onstop = null;
+      try { S.recording.mediaRecorder.stop(); } catch(e){}
+    }
+    if (S.recording.stream) S.recording.stream.getTracks().forEach(t => t.stop());
+    clearInterval(S.recording.timer);
+    S.recording.active = false; S.recording.paused = false;
+    S.recording.sessionCount = Math.max(0, S.recording.sessionCount - 1);
+    document.getElementById('btnStart').disabled = false; document.getElementById('btnStart').style.opacity = '1';
+    document.getElementById('btnPause').disabled = true; document.getElementById('btnPause').style.opacity = '0.4';
+    document.getElementById('btnStop').disabled = true; document.getElementById('btnStop').style.opacity = '0.4';
+    document.getElementById('timer').textContent = '00:00:00';
+    document.getElementById('timer').classList.remove('active');
+    document.getElementById('btnDelCurrent').style.display = 'none';
+    document.getElementById('waveform').innerHTML = '<span style="font-size:11px;color:var(--muted);font-family:\'IBM Plex Mono\',monospace">等待錄音…</span>';
+    updateRecStatus('idle');
+    showToast('🗑 已刪除當前錄音');
+  });
+}
+
+function renderRecFiles() {
+  const prefix = buildPrefix();
+  const relevant = S.files.filter(f => f.type === 'audio' && f.interviewPrefix === prefix);
+  const el = document.getElementById('recFilesList');
+  if (relevant.length === 0) { el.innerHTML = ''; return; }
+  el.innerHTML = '<div style="font-size:11px;font-family:\'IBM Plex Mono\',monospace;color:var(--muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:1px">本次採訪錄音</div>' +
+    relevant.map(f => `
+    <div class="rec-file-item">
+      <div style="flex:1">
+        <div class="rec-file-name">${f.filename}</div>
+        <div class="rec-file-meta">${f.timestamp} · ${formatSize(f.size)} · ${formatTime(f.duration)}</div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <span style="cursor:pointer;font-size:18px" onclick="previewFile(${f.id})" title="預覽">▶</span>
+        <span class="rec-file-del" onclick="deleteFile(${f.id})" title="刪除">🗑</span>
+      </div>
+    </div>`).join('');
+}
+
+function animateWave() {
+  const el = document.getElementById('waveform');
+  el.innerHTML = '';
+  for (let i=0;i<22;i++) {
+    const b = document.createElement('div');
+    b.style.cssText = `width:3px;height:${4+Math.random()*28}px;background:var(--red);border-radius:2px;opacity:${0.5+Math.random()*0.5}`;
+    el.appendChild(b);
+  }
+}
+
+// ═══════════════════════════════════════
+// PHOTO
+// ═══════════════════════════════════════
+function updatePhotoPanel() {
+  document.getElementById('photoFilenameBar').textContent = buildPrefix();
+}
+
+async function startCamera() {
+  try {
+    if (S.camera.stream) S.camera.stream.getTracks().forEach(t => t.stop());
+    const flashOn = document.getElementById('flashToggle').checked;
+    const constraints = {
+      video: { facingMode:'environment', width:{ideal:1920}, height:{ideal:1080} }
+    };
+    // Torch (flash) support
+    S.camera.stream = await navigator.mediaDevices.getUserMedia(constraints);
+    const track = S.camera.stream.getVideoTracks()[0];
+    if (track.getCapabilities && track.getCapabilities().torch) {
+      track.applyConstraints({ advanced:[{ torch: flashOn }] }).catch(()=>{});
+    }
+    const video = document.getElementById('preview-video');
+    video.srcObject = S.camera.stream;
+    video.style.display = 'block';
+    document.getElementById('preview-img').style.display = 'none';
+    document.getElementById('cameraPlaceholder').style.display = 'none';
+    document.getElementById('captureBtn').style.display = 'flex';
+    showToast('📷 相機已就緒' + (flashOn ? '（閃光燈開啟）':''));
+  } catch(e) {
+    showToast('❌ 無法訪問相機：' + e.message);
+  }
+}
+
+document.getElementById('flashToggle').addEventListener('change', async function() {
+  if (!S.camera.stream) return;
+  const track = S.camera.stream.getVideoTracks()[0];
+  if (track && track.getCapabilities && track.getCapabilities().torch) {
+    track.applyConstraints({ advanced:[{ torch: this.checked }] }).catch(()=>{});
+    showToast(this.checked ? '⚡ 閃光燈開啟' : '閃光燈關閉');
+  }
+});
+
+function capturePhoto() {
+  const video = document.getElementById('preview-video');
+  const canvas = document.getElementById('photoCanvas');
+  canvas.width = video.videoWidth || 1280;
+  canvas.height = video.videoHeight || 720;
+  canvas.getContext('2d').drawImage(video, 0, 0);
+  canvas.toBlob(blob => {
+    S.camera.capturedBlob = blob;
+    savePhotoFile(blob);
+  }, 'image/jpeg', 0.93);
+}
+
+function handleFileInput(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  savePhotoFile(file);
+  e.target.value = '';
+}
+
+function savePhotoFile(blob) {
+  S.photoCount++;
+  const prefix = buildPrefix();
+  const filename = prefix + '-' + S.photoCount + '.jpg';
+  const url = URL.createObjectURL(blob);
+  S.files.unshift({
+    id: Date.now(), type: 'photo', filename, blob,
+    size: blob.size, synced: false,
+    timestamp: new Date().toLocaleTimeString('zh-TW'),
+    previewUrl: url, interviewPrefix: prefix, photoNum: S.photoCount,
+    renameData: buildRenameData()
+  });
+  renderPhotoThumbs();
+  renderFiles();
+  showToast('📸 已保存：' + filename);
+}
+
+function renderPhotoThumbs() {
+  const prefix = buildPrefix();
+  const photos = S.files.filter(f => f.type==='photo' && f.interviewPrefix===prefix);
+  const el = document.getElementById('photoThumbList');
+  el.innerHTML = photos.map(f => `
+    <div class="photo-thumb">
+      <img src="${f.previewUrl}" onclick="previewFile(${f.id})">
+      <div class="thumb-num">-${f.photoNum}</div>
+      <div class="thumb-del" onclick="deleteFile(${f.id})">✕</div>
+    </div>`).join('');
+}
+
+// ═══════════════════════════════════════
+// FILES
+// ═══════════════════════════════════════
+function renderFiles() {
+  const el = document.getElementById('fileList');
+  document.getElementById('fileCount').textContent = S.files.length + ' 個';
+  if (S.files.length === 0) {
+    el.innerHTML = `<div style="text-align:center;padding:50px 20px;color:var(--muted)"><div style="font-size:48px;margin-bottom:12px">🗂</div><p style="font-size:14px;line-height:1.6">尚無採訪檔案<br>錄音或拍照後會出現在這裡</p></div>`;
+    return;
+  }
+  el.innerHTML = S.files.map(f => `
+    <div class="file-item" id="fi-${f.id}">
+      <div class="file-item-top">
+        <input type="checkbox" class="file-check" id="chk-${f.id}" ${f.selected?'checked':''} onchange="toggleFileSelect(${f.id},this.checked)">
+        <div class="file-type-icon">${f.type==='audio'?'🎙':'📸'}</div>
+        <div class="file-info">
+          <div class="file-name">${f.filename}</div>
+          <div class="file-meta">${f.timestamp} · ${formatSize(f.size)}${f.duration?' · '+formatTime(f.duration):''} · ${f.synced?'✅ 已同步':'⏳ 待同步'}</div>
+        </div>
+      </div>
+      <div class="file-actions">
+        <button class="btn btn-outline btn-sm" onclick="previewFile(${f.id})">👁 預覽</button>
+        <button class="btn btn-blue btn-sm" onclick="openRename(${f.id})" style="background:var(--blue);color:white">✏️ 重命名</button>
+        <button class="btn btn-outline btn-sm" onclick="downloadFile(${f.id})">⬇</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteFile(${f.id})">🗑</button>
+      </div>
+    </div>`).join('');
+}
+
+function toggleFileSelect(id, checked) {
+  const f = S.files.find(x=>x.id===id);
+  if (f) f.selected = checked;
+}
+
+function toggleSelectAll() {
+  const allChecked = S.files.every(f=>f.selected);
+  S.files.forEach(f => f.selected = !allChecked);
+  renderFiles();
+}
+
+function previewFile(id) {
+  const f = S.files.find(x=>x.id===id);
+  if (!f) return;
+  document.getElementById('previewModalTitle').textContent = f.filename;
+  const body = document.getElementById('previewModalBody');
+  if (f.type==='photo') {
+    body.innerHTML = `<img src="${f.previewUrl}" style="max-width:100%;max-height:60vh;object-fit:contain">`;
+  } else {
+    const url = URL.createObjectURL(f.blob);
+    body.innerHTML = `<audio controls src="${url}" style="width:100%;padding:20px"></audio>`;
+  }
+  document.getElementById('previewModal').classList.add('show');
+}
+
+function downloadFile(id) {
+  const f = S.files.find(x=>x.id===id);
+  if (!f||!f.blob) return;
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(f.blob);
+  a.download = f.filename; a.click();
+  showToast('⬇ 下載：' + f.filename);
+}
+
+function deleteFile(id) {
+  const f = S.files.find(x=>x.id===id);
+  if (!f) return;
+  showConfirm('刪除檔案', `確定刪除「${f.filename}」？`, () => {
+    S.files = S.files.filter(x=>x.id!==id);
+    renderFiles();
+    renderRecFiles();
+    renderPhotoThumbs();
+    showToast('🗑 已刪除');
+  });
+}
+
+// ═══════════════════════════════════════
+// RENAME
+// ═══════════════════════════════════════
+function buildRenameData() {
+  const s = S.setup;
+  return { seq: String(s.seq), date: s.date, showTime: s.showTime, city: s.city, reporter: s.reporter, subjectName: s.subjectName, subjectJob: s.subjectJob, custom: s.custom };
+}
+
+function openRename(id) {
+  const f = S.files.find(x=>x.id===id);
+  if (!f) return;
+  document.getElementById('renameFileId').value = id;
+  const d = f.renameData || buildRenameData();
+  const ext = f.type==='audio' ? '.mp3' : '.jpg';
+  const fields = [
+    { key:'seq', label:'序號', val: d.seq },
+    { key:'date', label:'日期', val: d.date },
+    { key:'showTime', label:'演出時間', val: d.showTime },
+    { key:'city', label:'城市', val: d.city },
+    { key:'reporter', label:'記者名', val: d.reporter },
+    { key:'subjectName', label:'被採訪者', val: d.subjectName },
+    { key:'subjectJob', label:'職業', val: d.subjectJob },
+    { key:'custom', label:'自定義名（屏蔽2-5）', val: d.custom }
+  ];
+  document.getElementById('renameFields').innerHTML = fields.map(fi => `
+    <div class="rename-field">
+      <label>${fi.label}</label>
+      <input type="text" id="rf-${fi.key}" value="${fi.val||''}" oninput="updateRenamePreview('${ext}')">
+    </div>`).join('');
+  updateRenamePreview(ext);
+  document.getElementById('renameModal').classList.add('show');
+}
+
+function updateRenamePreview(ext) {
+  const seq = clean(document.getElementById('rf-seq')?.value||'001') || '001';
+  const custom = document.getElementById('rf-custom')?.value||'';
+  let parts = [seq];
+  if (custom) {
+    parts.push(clean(custom));
+  } else {
+    parts.push(document.getElementById('rf-date')?.value||'');
+    const st = document.getElementById('rf-showTime')?.value||'';
+    if (st) parts.push(clean(st));
+    parts.push(clean(document.getElementById('rf-city')?.value||''));
+    parts.push(clean(document.getElementById('rf-reporter')?.value||''));
+  }
+  const sn = document.getElementById('rf-subjectName')?.value||'';
+  const sj = document.getElementById('rf-subjectJob')?.value||'';
+  if (sn) parts.push(clean(sn));
+  if (sj) parts.push(clean(sj));
+  document.getElementById('renamePreview').textContent = parts.join('-') + ext;
+}
+
+function confirmRename() {
+  const id = parseInt(document.getElementById('renameFileId').value);
+  const f = S.files.find(x=>x.id===id);
+  if (!f) return;
+  const newName = document.getElementById('renamePreview').textContent;
+  f.filename = newName;
+  f.renameData = {
+    seq: document.getElementById('rf-seq')?.value||'',
+    date: document.getElementById('rf-date')?.value||'',
+    showTime: document.getElementById('rf-showTime')?.value||'',
+    city: document.getElementById('rf-city')?.value||'',
+    reporter: document.getElementById('rf-reporter')?.value||'',
+    subjectName: document.getElementById('rf-subjectName')?.value||'',
+    subjectJob: document.getElementById('rf-subjectJob')?.value||'',
+    custom: document.getElementById('rf-custom')?.value||''
+  };
+  closeModal('renameModal');
+  renderFiles();
+  showToast('✅ 已重命名：' + newName);
+}
+
+// ═══════════════════════════════════════
+// SYNC
+// ═══════════════════════════════════════
+function selectSync(t) {
+  S.syncTarget = t;
+  ['gdrive','dropbox','local'].forEach(x => document.getElementById('opt-'+x).classList.toggle('selected', x===t));
+}
+
+function syncSelected() {
+  const sel = S.files.filter(f=>f.selected);
+  if (sel.length===0) { showToast('⚠ 請先勾選要同步的檔案'); return; }
+  if (S.syncTarget==='local') {
+    sel.forEach((f,i) => setTimeout(() => downloadFile(f.id), i*300));
+    setTimeout(() => { sel.forEach(f=>f.selected=false); renderFiles(); showToast('✅ 已下載 '+sel.length+' 個檔案'); }, sel.length*300+200);
+    return;
+  }
+  // Simulate cloud sync
+  let done=0;
+  sel.forEach((f,i) => setTimeout(() => {
+    f.synced=true; f.selected=false; done++;
+    document.getElementById('progressFill').style.width = Math.round(done/sel.length*100)+'%';
+    document.getElementById('progressText').textContent = done===sel.length ? '同步完成 ✓' : '同步中… '+Math.round(done/sel.length*100)+'%';
+    if (done===sel.length) { renderFiles(); showToast('✅ 已同步 '+done+' 個檔案'); }
+  }, (i+1)*500));
+}
+
+// ═══════════════════════════════════════
+// UTILS
+// ═══════════════════════════════════════
+function formatTime(s) {
+  const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),ss=s%60;
+  return [h,m,ss].map(v=>String(v).padStart(2,'0')).join(':');
+}
+function formatSize(b) {
+  if(b<1024) return b+'B'; if(b<1048576) return (b/1024).toFixed(1)+'KB'; return (b/1048576).toFixed(1)+'MB';
+}
+
+// ═══════════════════════════════════════
+// MODAL / CONFIRM / TOAST
+// ═══════════════════════════════════════
+function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+
+function showConfirm(title, msg, cb) {
+  document.getElementById('confirmTitle').textContent = title;
+  document.getElementById('confirmMsg').textContent = msg;
+  S.confirmCallback = cb;
+  document.getElementById('confirmOverlay').classList.add('show');
+  document.getElementById('confirmOkBtn').onclick = () => { closeConfirm(); cb(); };
+}
+function closeConfirm() { document.getElementById('confirmOverlay').classList.remove('show'); }
+
+let toastTimer;
+function showToast(msg) {
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>t.classList.remove('show'), 2800);
+}
+</script>
+</body>
+</html>
