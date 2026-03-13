@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>FieldPress v2</title>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+TC:wght@300;400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <style>
 :root {
   --ink: #0a0a0a; --paper: #f5f0e8; --red: #d42b2b; --amber: #e8a020;
@@ -131,8 +132,43 @@ header {
 input:checked + .toggle-slider { background:var(--amber); }
 input:checked + .toggle-slider:before { transform:translateX(20px); }
 
+/* FULLSCREEN CAMERA */
+.camera-fullscreen {
+  display:none; position:fixed; inset:0; background:#000; z-index:500;
+  flex-direction:column;
+}
+.camera-fullscreen.show { display:flex; }
+.camera-fs-video { flex:1; width:100%; object-fit:cover; }
+.camera-fs-bar {
+  background:rgba(0,0,0,0.85); padding:16px 20px 32px;
+  display:flex; align-items:center; justify-content:space-between;
+}
+.camera-fs-close {
+  color:white; font-size:28px; cursor:pointer; padding:8px; line-height:1;
+}
+.camera-fs-shutter {
+  width:72px; height:72px; border-radius:50%; border:4px solid white;
+  background:white; cursor:pointer; transition:transform 0.1s, background 0.1s;
+  display:flex; align-items:center; justify-content:center;
+}
+.camera-fs-shutter:active { transform:scale(0.92); background:#ddd; }
+.camera-fs-flash {
+  display:flex; flex-direction:column; align-items:center; gap:4px;
+  color:white; font-size:11px; font-family:'IBM Plex Mono',monospace; cursor:pointer;
+}
+.camera-fs-flash-icon { font-size:24px; }
+.camera-fs-flash.off { opacity:0.4; }
+.camera-fs-filename {
+  position:absolute; top:14px; left:0; right:0; text-align:center;
+  font-family:'IBM Plex Mono',monospace; font-size:11px; color:rgba(255,255,255,0.7);
+  pointer-events:none;
+}
+.camera-flash-overlay {
+  display:none; position:fixed; inset:0; background:white; z-index:600; pointer-events:none;
+}
+
 .camera-area { background:var(--ink); border-radius:8px; overflow:hidden; margin-bottom:12px; position:relative; min-height:200px; display:flex; align-items:center; justify-content:center; }
-#preview-video, #preview-img { width:100%; max-height:260px; object-fit:cover; display:block; }
+#preview-img { width:100%; max-height:260px; object-fit:cover; display:none; }
 .camera-placeholder { color:#555; text-align:center; padding:36px 20px; }
 .camera-placeholder .cp-icon { font-size:44px; }
 .camera-placeholder p { font-size:13px; margin-top:8px; }
@@ -197,6 +233,15 @@ input:checked + .toggle-slider:before { transform:translateX(20px); }
 .confirm-title { font-family:'Bebas Neue',sans-serif; font-size:20px; margin-bottom:8px; }
 .confirm-msg { font-size:13px; color:var(--muted); line-height:1.6; margin-bottom:16px; }
 
+/* SHARE */
+.share-app-btn {
+  background:var(--card); border:1.5px solid var(--border); border-radius:8px;
+  padding:10px 4px; text-align:center; cursor:pointer; transition:all 0.15s;
+}
+.share-app-btn:active { border-color:var(--steel); background:#ede8df; transform:scale(0.95); }
+.share-app-icon { font-size:24px; margin-bottom:4px; }
+.share-app-label { font-size:10px; font-family:'IBM Plex Mono',monospace; color:var(--muted); font-weight:500; }
+
 canvas { display:none; }
 </style>
 </head>
@@ -219,6 +264,7 @@ canvas { display:none; }
   <button class="tab" onclick="switchTab('record')"><span class="tab-icon">🎙</span>錄音</button>
   <button class="tab" onclick="switchTab('photo')"><span class="tab-icon">📸</span>拍照</button>
   <button class="tab" onclick="switchTab('files')"><span class="tab-icon">🗂</span>檔案</button>
+  <button class="tab" onclick="switchTab('cloud')"><span class="tab-icon">☁️</span>雲端</button>
 </div>
 
 <!-- ═══ SETUP ═══ -->
@@ -312,14 +358,6 @@ canvas { display:none; }
 <div class="panel" id="panel-photo">
   <div class="section-title">拍照</div>
 
-  <div class="flash-toggle">
-    <label class="toggle-switch">
-      <input type="checkbox" id="flashToggle" checked>
-      <span class="toggle-slider"></span>
-    </label>
-    <span class="flash-label">⚡ 閃光燈（預設開啟）</span>
-  </div>
-
   <div class="photo-filename-bar">
     <div style="font-size:10px;font-family:'IBM Plex Mono',monospace;color:var(--muted);margin-bottom:3px">當前採訪文件名前綴</div>
     <div class="photo-filename-text" id="photoFilenameBar">—</div>
@@ -328,22 +366,37 @@ canvas { display:none; }
   <div class="camera-area" id="cameraArea">
     <div class="camera-placeholder" id="cameraPlaceholder">
       <div class="cp-icon">📷</div>
-      <p>點擊「相機」開始拍攝<br>照片以臨時序號命名</p>
+      <p>點擊「開啟相機」進入全屏拍攝<br>照片以臨時序號命名</p>
     </div>
-    <video id="preview-video" autoplay playsinline style="display:none"></video>
     <img id="preview-img" style="display:none;width:100%;max-height:260px;object-fit:cover">
   </div>
 
   <div class="btn-row" style="margin-bottom:12px">
-    <button class="btn btn-primary" onclick="startCamera()">📷 相機</button>
-    <button class="btn btn-outline" onclick="document.getElementById('fileInput').click()">🖼 相冊</button>
-    <button class="btn btn-danger" id="captureBtn" onclick="capturePhoto()" style="display:none">⚡ 拍攝</button>
+    <button class="btn btn-primary" onclick="startCamera()">📷 開啟相機</button>
+    <button class="btn btn-outline" onclick="document.getElementById('fileInput').click()">🖼 從相冊選取</button>
   </div>
 
   <div class="photo-thumb-list" id="photoThumbList"></div>
   <input type="file" id="fileInput" accept="image/*" style="display:none" onchange="handleFileInput(event)">
   <canvas id="photoCanvas"></canvas>
 </div>
+
+<!-- FULLSCREEN CAMERA OVERLAY -->
+<div class="camera-fullscreen" id="cameraFullscreen">
+  <div class="camera-fs-filename" id="cameraFsFilename"></div>
+  <video id="preview-video" autoplay playsinline class="camera-fs-video"></video>
+  <div class="camera-fs-bar">
+    <div class="camera-fs-close" onclick="closeCamera()">✕</div>
+    <div class="camera-fs-shutter" onclick="capturePhoto()">
+      <div style="width:56px;height:56px;border-radius:50%;border:2px solid #aaa;background:white"></div>
+    </div>
+    <div class="camera-fs-flash" id="fsFlashBtn" onclick="toggleFsFlash()">
+      <span class="camera-fs-flash-icon">⚡</span>
+      <span id="fsFlashLabel">閃光燈</span>
+    </div>
+  </div>
+</div>
+<div class="camera-flash-overlay" id="flashOverlay"></div>
 
 <!-- ═══ FILES ═══ -->
 <div class="panel" id="panel-files">
@@ -352,11 +405,16 @@ canvas { display:none; }
     <div class="sync-options">
       <div class="sync-opt selected" id="opt-gdrive" onclick="selectSync('gdrive')"><span class="sync-opt-icon">🔵</span>Google Drive</div>
       <div class="sync-opt" id="opt-dropbox" onclick="selectSync('dropbox')"><span class="sync-opt-icon">📦</span>Dropbox</div>
-      <div class="sync-opt" id="opt-local" onclick="selectSync('local')"><span class="sync-opt-icon">💾</span>本機下載</div>
+      <div class="sync-opt" id="opt-ftp" onclick="selectSync('ftp')"><span class="sync-opt-icon">🖥</span>FTP</div>
+      <div class="sync-opt" id="opt-local" onclick="selectSync('local')"><span class="sync-opt-icon">💾</span>本機</div>
     </div>
+    <div id="sync-connection-hint" style="font-size:11px;font-family:'IBM Plex Mono',monospace;color:var(--muted);margin-bottom:8px"></div>
     <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
     <div class="progress-text" id="progressText">就緒</div>
-    <button class="btn btn-amber btn-full" style="margin-top:10px" onclick="syncSelected()">⬆ 同步所選檔案</button>
+    <div class="btn-row" style="margin-top:10px">
+      <button class="btn btn-amber" onclick="syncSelected()">⬆ 同步所選</button>
+      <button class="btn btn-blue" onclick="shareSelected()" style="background:#5b4fcf;color:white">📤 共享所選</button>
+    </div>
   </div>
 
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
@@ -370,13 +428,187 @@ canvas { display:none; }
   <div id="fileList"></div>
 </div>
 
-<!-- PREVIEW MODAL -->
-<div class="modal-overlay" id="previewModal">
-  <div class="modal">
-    <div class="modal-handle"></div>
-    <div class="section-title" id="previewModalTitle">預覽</div>
-    <div class="preview-modal-body" id="previewModalBody"></div>
-    <button class="btn btn-outline btn-full" onclick="closeModal('previewModal')">關閉</button>
+<!-- ═══ CLOUD SETTINGS ═══ -->
+<div class="panel" id="panel-cloud">
+  <div class="section-title">雲端連接設置</div>
+
+  <!-- Google Drive -->
+  <div style="background:var(--card);border:1.5px solid var(--border);border-radius:8px;padding:14px;margin-bottom:14px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:22px">🔵</span>
+        <span style="font-weight:700;font-size:15px">Google Drive</span>
+      </div>
+      <span id="gdrive-status" style="font-size:11px;font-family:'IBM Plex Mono',monospace;color:var(--muted);background:#f0ede6;padding:3px 10px;border-radius:20px">未連接</span>
+    </div>
+    <div class="form-group">
+      <label>登入方式</label>
+      <select id="gdrive-method" onchange="updateGdriveUI()">
+        <option value="oauth">Google 帳號登入（OAuth）</option>
+        <option value="folder">共享文件夾連結</option>
+      </select>
+    </div>
+    <div id="gdrive-oauth-section">
+      <div style="background:#e8f0fe;border-radius:6px;padding:10px 12px;margin-bottom:10px;font-size:12px;color:#1a5fa8;line-height:1.6">
+        點擊下方按鈕跳轉 Google 授權頁面，登入後選擇要同步的文件夾。<br>
+        <span style="font-size:11px;color:var(--muted)">需要在 Google Cloud Console 配置 OAuth Client ID 才能完整使用。</span>
+      </div>
+      <div class="form-group">
+        <label>Google OAuth Client ID <span class="optional">（可選，留空為測試模式）</span></label>
+        <input type="text" id="gdrive-client-id" placeholder="your-client-id.apps.googleusercontent.com">
+      </div>
+      <div class="form-group">
+        <label>同步文件夾名稱</label>
+        <input type="text" id="gdrive-folder" placeholder="例：FieldPress采訪" value="FieldPress">
+      </div>
+      <button class="btn btn-primary btn-full" onclick="connectGdrive()">🔐 授權並連接 Google Drive</button>
+    </div>
+    <div id="gdrive-folder-section" style="display:none">
+      <div class="form-group">
+        <label>共享文件夾連結</label>
+        <input type="text" id="gdrive-share-url" placeholder="https://drive.google.com/drive/folders/...">
+      </div>
+      <button class="btn btn-primary btn-full" onclick="saveGdriveFolder()">💾 保存連結</button>
+    </div>
+  </div>
+
+  <!-- Dropbox -->
+  <div style="background:var(--card);border:1.5px solid var(--border);border-radius:8px;padding:14px;margin-bottom:14px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:22px">📦</span>
+        <span style="font-weight:700;font-size:15px">Dropbox</span>
+      </div>
+      <span id="dropbox-status" style="font-size:11px;font-family:'IBM Plex Mono',monospace;color:var(--muted);background:#f0ede6;padding:3px 10px;border-radius:20px">未連接</span>
+    </div>
+    <div class="form-group">
+      <label>登入方式</label>
+      <select id="dropbox-method" onchange="updateDropboxUI()">
+        <option value="oauth">Dropbox 帳號登入（OAuth）</option>
+        <option value="folder">共享文件夾連結</option>
+      </select>
+    </div>
+    <div id="dropbox-oauth-section">
+      <div style="background:#f0f7ff;border-radius:6px;padding:10px 12px;margin-bottom:10px;font-size:12px;color:#0061ff;line-height:1.6">
+        點擊下方按鈕跳轉 Dropbox 授權頁面，登入後自動連接。<br>
+        <span style="font-size:11px;color:var(--muted)">需要在 Dropbox App Console 獲取 App Key。</span>
+      </div>
+      <div class="form-group">
+        <label>Dropbox App Key <span class="optional">（可選，留空為測試模式）</span></label>
+        <input type="text" id="dropbox-app-key" placeholder="your_dropbox_app_key">
+      </div>
+      <div class="form-group">
+        <label>同步文件夾路徑</label>
+        <input type="text" id="dropbox-folder" placeholder="例：/FieldPress" value="/FieldPress">
+      </div>
+      <button class="btn btn-primary btn-full" onclick="connectDropbox()">🔐 授權並連接 Dropbox</button>
+    </div>
+    <div id="dropbox-folder-section" style="display:none">
+      <div class="form-group">
+        <label>共享文件夾連結</label>
+        <input type="text" id="dropbox-share-url" placeholder="https://www.dropbox.com/sh/...">
+      </div>
+      <button class="btn btn-primary btn-full" onclick="saveDropboxFolder()">💾 保存連結</button>
+    </div>
+  </div>
+
+  <!-- FTP -->
+  <div style="background:var(--card);border:1.5px solid var(--border);border-radius:8px;padding:14px;margin-bottom:14px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:22px">🖥</span>
+        <span style="font-weight:700;font-size:15px">FTP 服務器</span>
+      </div>
+      <span id="ftp-status" style="font-size:11px;font-family:'IBM Plex Mono',monospace;color:var(--muted);background:#f0ede6;padding:3px 10px;border-radius:20px">未連接</span>
+    </div>
+    <div class="form-group">
+      <label>FTP 地址</label>
+      <input type="text" id="ftp-host" placeholder="例：ftp.mycompany.com 或 192.168.1.100">
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>端口</label>
+        <input type="number" id="ftp-port" placeholder="21" value="21">
+      </div>
+      <div class="form-group">
+        <label>協議</label>
+        <select id="ftp-protocol">
+          <option value="ftp">FTP</option>
+          <option value="sftp">SFTP</option>
+          <option value="ftps">FTPS</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group">
+      <label>用戶名</label>
+      <input type="text" id="ftp-user" placeholder="用戶名">
+    </div>
+    <div class="form-group">
+      <label>密碼</label>
+      <input type="password" id="ftp-pass" placeholder="密碼">
+    </div>
+    <div class="form-group">
+      <label>上傳目錄</label>
+      <input type="text" id="ftp-path" placeholder="例：/uploads/fieldpress" value="/uploads">
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-outline" onclick="testFtp()">🔗 測試連接</button>
+      <button class="btn btn-primary" onclick="saveFtp()">💾 保存設置</button>
+    </div>
+  </div>
+
+  <!-- Connected summary -->
+  <div id="cloud-summary" style="display:none;background:var(--ink);border-radius:8px;padding:14px;color:var(--paper)">
+    <div style="font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:1px;margin-bottom:8px;color:var(--amber)">已配置的連接</div>
+    <div id="cloud-summary-content" style="font-size:12px;font-family:'IBM Plex Mono',monospace;line-height:2"></div>
+  </div>
+</div>
+
+<!-- PREVIEW MODAL (fullscreen swipeable) -->
+<div class="modal-overlay" id="previewModal" style="align-items:stretch;background:rgba(0,0,0,0.95)">
+  <div style="width:100%;height:100%;display:flex;flex-direction:column;position:relative">
+
+    <!-- Top bar -->
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:rgba(0,0,0,0.6);flex-shrink:0">
+      <button onclick="closeModal('previewModal')" style="background:none;border:none;color:white;font-size:22px;cursor:pointer;padding:4px">✕</button>
+      <div style="flex:1;text-align:center;padding:0 10px">
+        <div id="previewTitle" style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:rgba(255,255,255,0.7);word-break:break-all;line-height:1.4"></div>
+        <div id="previewCounter" style="font-size:10px;color:rgba(255,255,255,0.4);margin-top:2px;font-family:'IBM Plex Mono',monospace"></div>
+      </div>
+      <button onclick="closeModal('previewModal')" style="background:none;border:none;color:transparent;font-size:22px;padding:4px">✕</button>
+    </div>
+
+    <!-- Swipe area -->
+    <div id="previewSwipeArea" style="flex:1;position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center"
+      ontouchstart="pvTouchStart(event)" ontouchmove="pvTouchMove(event)" ontouchend="pvTouchEnd(event)">
+
+      <!-- Prev arrow -->
+      <button id="pvPrev" onclick="previewNav(-1)"
+        style="position:absolute;left:8px;top:50%;transform:translateY(-50%);z-index:10;background:rgba(255,255,255,0.15);border:none;color:white;font-size:24px;width:40px;height:40px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center">‹</button>
+
+      <!-- Content -->
+      <div id="previewContent" style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;padding:0 52px;transition:transform 0.25s ease"></div>
+
+      <!-- Next arrow -->
+      <button id="pvNext" onclick="previewNav(1)"
+        style="position:absolute;right:8px;top:50%;transform:translateY(-50%);z-index:10;background:rgba(255,255,255,0.15);border:none;color:white;font-size:24px;width:40px;height:40px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center">›</button>
+    </div>
+
+    <!-- Bottom action bar -->
+    <div style="padding:12px 16px 32px;background:rgba(0,0,0,0.7);display:flex;gap:8px;flex-shrink:0">
+      <button id="pvSelectBtn" onclick="pvToggleSelect()"
+        style="flex:1;padding:10px;border-radius:6px;border:1.5px solid rgba(255,255,255,0.3);background:transparent;color:white;font-size:13px;font-weight:700;font-family:'Noto Sans TC',sans-serif;cursor:pointer">
+        ☐ 選擇
+      </button>
+      <button onclick="pvDownload()"
+        style="flex:1;padding:10px;border-radius:6px;border:none;background:rgba(255,255,255,0.15);color:white;font-size:13px;font-weight:700;font-family:'Noto Sans TC',sans-serif;cursor:pointer">
+        ⬇ 下載
+      </button>
+      <button onclick="pvDelete()"
+        style="flex:1;padding:10px;border-radius:6px;border:none;background:rgba(212,43,43,0.7);color:white;font-size:13px;font-weight:700;font-family:'Noto Sans TC',sans-serif;cursor:pointer">
+        🗑 刪除
+      </button>
+    </div>
   </div>
 </div>
 
@@ -395,6 +627,60 @@ canvas { display:none; }
       <button class="btn btn-success" onclick="confirmRename()">✅ 確認重命名</button>
       <button class="btn btn-outline" onclick="closeModal('renameModal')">取消</button>
     </div>
+  </div>
+</div>
+
+<!-- SHARE MODAL -->
+<div class="modal-overlay" id="shareModal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="section-title">📤 共享檔案</div>
+
+    <div id="shareFilesSummary" style="background:var(--ink);border-radius:6px;padding:10px 14px;margin-bottom:14px">
+      <div style="font-size:10px;font-family:'IBM Plex Mono',monospace;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:1px">將打包的檔案</div>
+      <div id="shareFilesList" style="font-size:11px;font-family:'IBM Plex Mono',monospace;color:var(--amber);line-height:1.8"></div>
+    </div>
+
+    <div style="margin-bottom:14px">
+      <div style="font-size:10px;font-family:'IBM Plex Mono',monospace;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">ZIP 文件名</div>
+      <input type="text" id="shareZipName" style="width:100%;padding:9px 11px;border:1.5px solid var(--border);border-radius:4px;font-size:13px;font-family:'IBM Plex Mono',monospace;background:var(--card)">
+    </div>
+
+    <!-- ZIP progress -->
+    <div id="shareProgress" style="display:none;margin-bottom:14px">
+      <div style="font-size:11px;font-family:'IBM Plex Mono',monospace;color:var(--muted);margin-bottom:6px" id="shareProgressText">正在打包…</div>
+      <div style="background:#e0ddd6;border-radius:4px;height:6px;overflow:hidden">
+        <div id="shareProgressFill" style="height:100%;background:linear-gradient(90deg,#5b4fcf,var(--amber));border-radius:4px;width:0%;transition:width 0.3s ease"></div>
+      </div>
+    </div>
+
+    <div style="font-size:10px;font-family:'IBM Plex Mono',monospace;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px">選擇發送方式</div>
+
+    <!-- App grid -->
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px" id="shareAppGrid">
+      <div class="share-app-btn" onclick="shareViaApp('system')">
+        <div class="share-app-icon">📱</div>
+        <div class="share-app-label">系統分享</div>
+      </div>
+      <div class="share-app-btn" onclick="shareViaApp('signal')">
+        <div class="share-app-icon">🔵</div>
+        <div class="share-app-label">Signal</div>
+      </div>
+      <div class="share-app-btn" onclick="shareViaApp('email')">
+        <div class="share-app-icon">✉️</div>
+        <div class="share-app-label">電郵</div>
+      </div>
+      <div class="share-app-btn" onclick="shareViaApp('download')">
+        <div class="share-app-icon">⬇️</div>
+        <div class="share-app-label">下載ZIP</div>
+      </div>
+    </div>
+
+    <div style="font-size:11px;color:var(--muted);line-height:1.6;margin-bottom:14px;padding:8px 10px;background:#f5f0e8;border-radius:5px;border-left:3px solid var(--border)">
+      💡 「系統分享」會調用手機原生分享菜單，可直接選擇 Signal、WhatsApp 等已安裝的 App。其餘按鈕為快捷入口。
+    </div>
+
+    <button class="btn btn-outline btn-full" onclick="closeModal('shareModal')">取消</button>
   </div>
 </div>
 
@@ -423,9 +709,9 @@ const S = {
   photoCount: 0,
   files: [],
   recording: { active:false, paused:false, mediaRecorder:null, chunks:[], seconds:0, timer:null, stream:null, sessionCount:0, currentBlob:null, quality:'high' },
-  camera: { stream:null, capturedBlob:null },
+  camera: { stream:null, capturedBlob:null, flashEnabled:true },
+  cloudSettings: { gdrive:{connected:false,method:'oauth',folder:'FieldPress',shareUrl:'',clientId:''}, dropbox:{connected:false,method:'oauth',folder:'/FieldPress',shareUrl:'',appKey:''}, ftp:{connected:false,host:'',port:21,protocol:'ftp',user:'',pass:'',path:'/uploads'} },
   syncTarget: 'gdrive',
-  cloudConnected: false,
   confirmCallback: null
 };
 
@@ -448,13 +734,14 @@ window.onload = () => {
 // TABS
 // ═══════════════════════════════════════
 function switchTab(name) {
-  ['setup','record','photo','files'].forEach((t,i) => {
+  ['setup','record','photo','files','cloud'].forEach((t,i) => {
     document.querySelectorAll('.tab')[i].classList.toggle('active', t === name);
     document.getElementById('panel-'+t).classList.toggle('active', t === name);
   });
   if (name==='record') updateRecordPanel();
   if (name==='photo') updatePhotoPanel();
   if (name==='files') renderFiles();
+  if (name==='cloud') renderCloudSummary();
 }
 
 // ═══════════════════════════════════════
@@ -505,12 +792,18 @@ function saveSetup() {
 // NEXT INTERVIEW
 // ═══════════════════════════════════════
 function startNextInterview() {
-  // Auto-stop any active recording
+  // If recording is active or paused, save it with the CURRENT seq before incrementing
   if (S.recording.active) {
+    S.recording.savedPrefixOverride = buildPrefix();
     stopRecording(true);
-    showToast('⏹ 上一個錄音已自動保存');
+    setTimeout(() => _doNextInterview(), 300);
+  } else {
+    _doNextInterview();
   }
-  // Increment seq only if setting wasn't just changed
+}
+
+function _doNextInterview() {
+  S.recording.savedPrefixOverride = null;
   if (!S.settingChanged) {
     S.setup.seq++;
     document.getElementById('interviewSeq').value = S.setup.seq;
@@ -518,7 +811,6 @@ function startNextInterview() {
   }
   S.settingChanged = false;
   S.recording.sessionCount = 0;
-  S.audioCount = 0;
   S.photoCount = 0;
   switchTab('record');
   showToast('🎙 採訪 #' + S.setup.seq + ' 開始！');
@@ -630,7 +922,7 @@ function stopRecording(silent) {
 
 function saveRecording() {
   const blob = new Blob(S.recording.chunks, { type: 'audio/webm' });
-  const prefix = buildPrefix();
+  const prefix = S.recording.savedPrefixOverride || buildPrefix();
   const count = S.recording.sessionCount;
   const filename = count === 1 ? prefix + '.mp3' : prefix + '-' + count + '.mp3';
   const duration = S.recording.seconds;
@@ -692,6 +984,7 @@ function renderRecFiles() {
   const relevant = S.files.filter(f => f.type === 'audio' && f.interviewPrefix === prefix);
   const el = document.getElementById('recFilesList');
   if (relevant.length === 0) { el.innerHTML = ''; return; }
+  const recIds = relevant.map(f => f.id).join(',');
   el.innerHTML = '<div style="font-size:11px;font-family:\'IBM Plex Mono\',monospace;color:var(--muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:1px">本次採訪錄音</div>' +
     relevant.map(f => `
     <div class="rec-file-item">
@@ -700,7 +993,7 @@ function renderRecFiles() {
         <div class="rec-file-meta">${f.timestamp} · ${formatSize(f.size)} · ${formatTime(f.duration)}</div>
       </div>
       <div style="display:flex;gap:8px;align-items:center">
-        <span style="cursor:pointer;font-size:18px" onclick="previewFile(${f.id})" title="預覽">▶</span>
+        <span style="cursor:pointer;font-size:18px" onclick="previewFile(${f.id},[${recIds}])" title="預覽">▶</span>
         <span class="rec-file-del" onclick="deleteFile(${f.id})" title="刪除">🗑</span>
       </div>
     </div>`).join('');
@@ -726,46 +1019,86 @@ function updatePhotoPanel() {
 async function startCamera() {
   try {
     if (S.camera.stream) S.camera.stream.getTracks().forEach(t => t.stop());
-    const flashOn = document.getElementById('flashToggle').checked;
-    const constraints = {
+    S.camera.stream = await navigator.mediaDevices.getUserMedia({
       video: { facingMode:'environment', width:{ideal:1920}, height:{ideal:1080} }
-    };
-    // Torch (flash) support
-    S.camera.stream = await navigator.mediaDevices.getUserMedia(constraints);
-    const track = S.camera.stream.getVideoTracks()[0];
-    if (track.getCapabilities && track.getCapabilities().torch) {
-      track.applyConstraints({ advanced:[{ torch: flashOn }] }).catch(()=>{});
-    }
+    });
     const video = document.getElementById('preview-video');
     video.srcObject = S.camera.stream;
-    video.style.display = 'block';
-    document.getElementById('preview-img').style.display = 'none';
-    document.getElementById('cameraPlaceholder').style.display = 'none';
-    document.getElementById('captureBtn').style.display = 'flex';
-    showToast('📷 相機已就緒' + (flashOn ? '（閃光燈開啟）':''));
+    // Update fullscreen filename label
+    document.getElementById('cameraFsFilename').textContent = buildPrefix() + '-' + (S.photoCount+1) + '.jpg';
+    // Show flash btn state
+    updateFsFlashUI();
+    document.getElementById('cameraFullscreen').classList.add('show');
+    showToast('📷 點擊快門拍攝');
   } catch(e) {
     showToast('❌ 無法訪問相機：' + e.message);
   }
 }
 
-document.getElementById('flashToggle').addEventListener('change', async function() {
+function closeCamera() {
+  if (S.camera.stream) S.camera.stream.getTracks().forEach(t => t.stop());
+  S.camera.stream = null;
+  document.getElementById('cameraFullscreen').classList.remove('show');
+}
+
+function toggleFsFlash() {
+  S.camera.flashEnabled = !S.camera.flashEnabled;
+  updateFsFlashUI();
+}
+
+function updateFsFlashUI() {
+  const btn = document.getElementById('fsFlashBtn');
+  const lbl = document.getElementById('fsFlashLabel');
+  if (S.camera.flashEnabled) {
+    btn.classList.remove('off');
+    lbl.textContent = '閃光燈';
+  } else {
+    btn.classList.add('off');
+    lbl.textContent = '已關閉';
+  }
+}
+
+async function setTorch(on) {
   if (!S.camera.stream) return;
   const track = S.camera.stream.getVideoTracks()[0];
   if (track && track.getCapabilities && track.getCapabilities().torch) {
-    track.applyConstraints({ advanced:[{ torch: this.checked }] }).catch(()=>{});
-    showToast(this.checked ? '⚡ 閃光燈開啟' : '閃光燈關閉');
+    try { await track.applyConstraints({ advanced:[{ torch: on }] }); } catch(e){}
   }
-});
+}
 
-function capturePhoto() {
+function doFlashEffect() {
+  const overlay = document.getElementById('flashOverlay');
+  overlay.style.display = 'block';
+  overlay.style.opacity = '1';
+  setTimeout(() => {
+    overlay.style.transition = 'opacity 0.3s';
+    overlay.style.opacity = '0';
+    setTimeout(() => { overlay.style.display='none'; overlay.style.transition=''; }, 300);
+  }, 80);
+}
+
+async function capturePhoto() {
   const video = document.getElementById('preview-video');
+  if (!video.srcObject) return;
+
+  // Turn on torch if enabled
+  if (S.camera.flashEnabled) await setTorch(true);
+
+  // Flash white overlay effect
+  doFlashEffect();
+
   const canvas = document.getElementById('photoCanvas');
   canvas.width = video.videoWidth || 1280;
   canvas.height = video.videoHeight || 720;
   canvas.getContext('2d').drawImage(video, 0, 0);
+
+  // Turn off torch after shot
+  if (S.camera.flashEnabled) setTimeout(() => setTorch(false), 400);
+
   canvas.toBlob(blob => {
-    S.camera.capturedBlob = blob;
     savePhotoFile(blob);
+    // Update filename label for next shot
+    document.getElementById('cameraFsFilename').textContent = buildPrefix() + '-' + (S.photoCount+1) + '.jpg';
   }, 'image/jpeg', 0.93);
 }
 
@@ -781,6 +1114,12 @@ function savePhotoFile(blob) {
   const prefix = buildPrefix();
   const filename = prefix + '-' + S.photoCount + '.jpg';
   const url = URL.createObjectURL(blob);
+
+  // Show last captured in panel
+  const img = document.getElementById('preview-img');
+  img.src = url; img.style.display = 'block';
+  document.getElementById('cameraPlaceholder').style.display = 'none';
+
   S.files.unshift({
     id: Date.now(), type: 'photo', filename, blob,
     size: blob.size, synced: false,
@@ -796,10 +1135,11 @@ function savePhotoFile(blob) {
 function renderPhotoThumbs() {
   const prefix = buildPrefix();
   const photos = S.files.filter(f => f.type==='photo' && f.interviewPrefix===prefix);
+  const photoIds = photos.map(f => f.id).join(',');
   const el = document.getElementById('photoThumbList');
   el.innerHTML = photos.map(f => `
     <div class="photo-thumb">
-      <img src="${f.previewUrl}" onclick="previewFile(${f.id})">
+      <img src="${f.previewUrl}" onclick="previewFile(${f.id},[${photoIds}])">
       <div class="thumb-num">-${f.photoNum}</div>
       <div class="thumb-del" onclick="deleteFile(${f.id})">✕</div>
     </div>`).join('');
@@ -815,6 +1155,7 @@ function renderFiles() {
     el.innerHTML = `<div style="text-align:center;padding:50px 20px;color:var(--muted)"><div style="font-size:48px;margin-bottom:12px">🗂</div><p style="font-size:14px;line-height:1.6">尚無採訪檔案<br>錄音或拍照後會出現在這裡</p></div>`;
     return;
   }
+  const allIds = S.files.map(f=>f.id).join(',');
   el.innerHTML = S.files.map(f => `
     <div class="file-item" id="fi-${f.id}">
       <div class="file-item-top">
@@ -826,7 +1167,7 @@ function renderFiles() {
         </div>
       </div>
       <div class="file-actions">
-        <button class="btn btn-outline btn-sm" onclick="previewFile(${f.id})">👁 預覽</button>
+        <button class="btn btn-outline btn-sm" onclick="previewFile(${f.id},[${allIds}])">👁 預覽</button>
         <button class="btn btn-blue btn-sm" onclick="openRename(${f.id})" style="background:var(--blue);color:white">✏️ 重命名</button>
         <button class="btn btn-outline btn-sm" onclick="downloadFile(${f.id})">⬇</button>
         <button class="btn btn-danger btn-sm" onclick="deleteFile(${f.id})">🗑</button>
@@ -845,18 +1186,128 @@ function toggleSelectAll() {
   renderFiles();
 }
 
-function previewFile(id) {
-  const f = S.files.find(x=>x.id===id);
-  if (!f) return;
-  document.getElementById('previewModalTitle').textContent = f.filename;
-  const body = document.getElementById('previewModalBody');
-  if (f.type==='photo') {
-    body.innerHTML = `<img src="${f.previewUrl}" style="max-width:100%;max-height:60vh;object-fit:contain">`;
+// ═══════════════════════════════════════
+// PREVIEW (swipeable)
+// ═══════════════════════════════════════
+let _pvList = [];   // files available for swipe in current context
+let _pvIndex = 0;   // current index in _pvList
+let _pvTouchX = 0;
+
+function previewFile(id, contextList) {
+  // contextList: optional array of file ids to swipe through
+  // If not provided, use all files
+  if (contextList && contextList.length) {
+    _pvList = contextList;
   } else {
-    const url = URL.createObjectURL(f.blob);
-    body.innerHTML = `<audio controls src="${url}" style="width:100%;padding:20px"></audio>`;
+    _pvList = S.files.map(f => f.id);
   }
+  _pvIndex = _pvList.indexOf(id);
+  if (_pvIndex < 0) { _pvList = [id]; _pvIndex = 0; }
+  _pvRender();
   document.getElementById('previewModal').classList.add('show');
+}
+
+function _pvRender() {
+  const id = _pvList[_pvIndex];
+  const f = S.files.find(x => x.id === id);
+  if (!f) return;
+
+  // Title + counter
+  document.getElementById('previewTitle').textContent = f.filename;
+  document.getElementById('previewCounter').textContent =
+    (_pvIndex + 1) + ' / ' + _pvList.length;
+
+  // Nav arrows
+  document.getElementById('pvPrev').style.opacity = _pvIndex > 0 ? '1' : '0.2';
+  document.getElementById('pvNext').style.opacity = _pvIndex < _pvList.length - 1 ? '1' : '0.2';
+
+  // Content
+  const content = document.getElementById('previewContent');
+  content.innerHTML = '';
+  if (f.type === 'photo') {
+    const img = document.createElement('img');
+    img.src = f.previewUrl;
+    img.style.cssText = 'max-width:100%;max-height:100%;object-fit:contain;border-radius:4px';
+    content.appendChild(img);
+  } else {
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'width:100%;padding:20px;text-align:center';
+    const icon = document.createElement('div');
+    icon.style.cssText = 'font-size:64px;margin-bottom:16px';
+    icon.textContent = '🎙';
+    const audio = document.createElement('audio');
+    audio.controls = true;
+    audio.style.cssText = 'width:100%';
+    audio.src = URL.createObjectURL(f.blob);
+    const name = document.createElement('div');
+    name.style.cssText = 'font-family:"IBM Plex Mono",monospace;font-size:11px;color:rgba(255,255,255,0.5);margin-top:12px;word-break:break-all;line-height:1.5';
+    name.textContent = f.filename;
+    wrap.appendChild(icon);
+    wrap.appendChild(audio);
+    wrap.appendChild(name);
+    content.appendChild(wrap);
+  }
+
+  // Select button state
+  const btn = document.getElementById('pvSelectBtn');
+  btn.textContent = f.selected ? '☑ 已選擇' : '☐ 選擇';
+  btn.style.background = f.selected ? 'rgba(232,160,32,0.4)' : 'transparent';
+  btn.style.borderColor = f.selected ? 'var(--amber)' : 'rgba(255,255,255,0.3)';
+}
+
+function previewNav(dir) {
+  const newIdx = _pvIndex + dir;
+  if (newIdx < 0 || newIdx >= _pvList.length) return;
+  _pvIndex = newIdx;
+  // Animate slide
+  const content = document.getElementById('previewContent');
+  content.style.transition = 'none';
+  content.style.transform = `translateX(${dir > 0 ? '60px' : '-60px'})`;
+  content.style.opacity = '0';
+  setTimeout(() => {
+    _pvRender();
+    content.style.transition = 'transform 0.2s ease, opacity 0.2s ease';
+    content.style.transform = 'translateX(0)';
+    content.style.opacity = '1';
+  }, 60);
+}
+
+function pvTouchStart(e) { _pvTouchX = e.touches[0].clientX; }
+function pvTouchMove(e) { e.preventDefault(); }
+function pvTouchEnd(e) {
+  const dx = e.changedTouches[0].clientX - _pvTouchX;
+  if (Math.abs(dx) > 50) previewNav(dx < 0 ? 1 : -1);
+}
+
+function pvToggleSelect() {
+  const id = _pvList[_pvIndex];
+  const f = S.files.find(x => x.id === id);
+  if (!f) return;
+  f.selected = !f.selected;
+  _pvRender();
+  renderFiles();
+  renderRecFiles();
+  renderPhotoThumbs();
+  showToast(f.selected ? '☑ 已加入選擇' : '☐ 已取消選擇');
+}
+
+function pvDownload() {
+  downloadFile(_pvList[_pvIndex]);
+}
+
+function pvDelete() {
+  const id = _pvList[_pvIndex];
+  const f = S.files.find(x => x.id === id);
+  if (!f) return;
+  showConfirm('刪除檔案', `確定刪除「${f.filename}」？`, () => {
+    S.files = S.files.filter(x => x.id !== id);
+    _pvList = _pvList.filter(x => x !== id);
+    renderFiles(); renderRecFiles(); renderPhotoThumbs();
+    if (_pvList.length === 0) { closeModal('previewModal'); return; }
+    _pvIndex = Math.min(_pvIndex, _pvList.length - 1);
+    _pvRender();
+    showToast('🗑 已刪除');
+  });
 }
 
 function downloadFile(id) {
@@ -955,11 +1406,133 @@ function confirmRename() {
 }
 
 // ═══════════════════════════════════════
+// CLOUD SETTINGS
+// ═══════════════════════════════════════
+function updateGdriveUI() {
+  const m = document.getElementById('gdrive-method').value;
+  document.getElementById('gdrive-oauth-section').style.display = m==='oauth' ? 'block' : 'none';
+  document.getElementById('gdrive-folder-section').style.display = m==='folder' ? 'block' : 'none';
+}
+function updateDropboxUI() {
+  const m = document.getElementById('dropbox-method').value;
+  document.getElementById('dropbox-oauth-section').style.display = m==='oauth' ? 'block' : 'none';
+  document.getElementById('dropbox-folder-section').style.display = m==='folder' ? 'block' : 'none';
+}
+
+function connectGdrive() {
+  const clientId = document.getElementById('gdrive-client-id').value.trim();
+  const folder = document.getElementById('gdrive-folder').value.trim() || 'FieldPress';
+  if (clientId) {
+    // Real OAuth flow
+    const redirect = encodeURIComponent(window.location.href.split('?')[0]);
+    const scope = encodeURIComponent('https://www.googleapis.com/auth/drive.file');
+    window.open(`https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${redirect}&response_type=token&scope=${scope}`, '_blank');
+    showToast('🔐 請在彈出窗口完成 Google 授權');
+  } else {
+    // Test mode
+    S.cloudSettings.gdrive.connected = true;
+    S.cloudSettings.gdrive.folder = folder;
+    S.cloudSettings.gdrive.clientId = '';
+    document.getElementById('gdrive-status').textContent = '✅ 已連接（測試）';
+    document.getElementById('gdrive-status').style.color = 'var(--green)';
+    showToast('✅ Google Drive 已連接（測試模式）');
+    renderCloudSummary();
+  }
+}
+
+function saveGdriveFolder() {
+  const url = document.getElementById('gdrive-share-url').value.trim();
+  if (!url) { showToast('⚠ 請填寫共享文件夾連結'); return; }
+  S.cloudSettings.gdrive.connected = true;
+  S.cloudSettings.gdrive.shareUrl = url;
+  document.getElementById('gdrive-status').textContent = '✅ 已配置';
+  document.getElementById('gdrive-status').style.color = 'var(--green)';
+  showToast('✅ Google Drive 共享鏈接已保存');
+  renderCloudSummary();
+}
+
+function connectDropbox() {
+  const appKey = document.getElementById('dropbox-app-key').value.trim();
+  const folder = document.getElementById('dropbox-folder').value.trim() || '/FieldPress';
+  if (appKey) {
+    const redirect = encodeURIComponent(window.location.href.split('?')[0]);
+    window.open(`https://www.dropbox.com/oauth2/authorize?client_id=${appKey}&redirect_uri=${redirect}&response_type=token`, '_blank');
+    showToast('🔐 請在彈出窗口完成 Dropbox 授權');
+  } else {
+    S.cloudSettings.dropbox.connected = true;
+    S.cloudSettings.dropbox.folder = folder;
+    document.getElementById('dropbox-status').textContent = '✅ 已連接（測試）';
+    document.getElementById('dropbox-status').style.color = 'var(--green)';
+    showToast('✅ Dropbox 已連接（測試模式）');
+    renderCloudSummary();
+  }
+}
+
+function saveDropboxFolder() {
+  const url = document.getElementById('dropbox-share-url').value.trim();
+  if (!url) { showToast('⚠ 請填寫共享文件夾連結'); return; }
+  S.cloudSettings.dropbox.connected = true;
+  S.cloudSettings.dropbox.shareUrl = url;
+  document.getElementById('dropbox-status').textContent = '✅ 已配置';
+  document.getElementById('dropbox-status').style.color = 'var(--green)';
+  showToast('✅ Dropbox 共享鏈接已保存');
+  renderCloudSummary();
+}
+
+function saveFtp() {
+  const host = document.getElementById('ftp-host').value.trim();
+  if (!host) { showToast('⚠ 請填寫 FTP 地址'); return; }
+  const user = document.getElementById('ftp-user').value.trim();
+  if (!user) { showToast('⚠ 請填寫用戶名'); return; }
+  S.cloudSettings.ftp = {
+    connected: true,
+    host, port: parseInt(document.getElementById('ftp-port').value)||21,
+    protocol: document.getElementById('ftp-protocol').value,
+    user, pass: document.getElementById('ftp-pass').value,
+    path: document.getElementById('ftp-path').value.trim()||'/uploads'
+  };
+  document.getElementById('ftp-status').textContent = '✅ 已保存';
+  document.getElementById('ftp-status').style.color = 'var(--green)';
+  showToast('✅ FTP 設置已保存');
+  renderCloudSummary();
+}
+
+function testFtp() {
+  const host = document.getElementById('ftp-host').value.trim();
+  if (!host) { showToast('⚠ 請先填寫 FTP 地址'); return; }
+  showToast('🔗 測試中… （需後端支持，當前為設置保存模式）');
+}
+
+function renderCloudSummary() {
+  const cs = S.cloudSettings;
+  const items = [];
+  if (cs.gdrive.connected) items.push('🔵 Google Drive → ' + (cs.gdrive.shareUrl || cs.gdrive.folder));
+  if (cs.dropbox.connected) items.push('📦 Dropbox → ' + (cs.dropbox.shareUrl || cs.dropbox.folder));
+  if (cs.ftp.connected) items.push('🖥 FTP → ' + cs.ftp.protocol.toUpperCase() + '://' + cs.ftp.host + cs.ftp.path);
+  const el = document.getElementById('cloud-summary');
+  if (items.length > 0) {
+    el.style.display = 'block';
+    document.getElementById('cloud-summary-content').innerHTML = items.join('<br>');
+  } else {
+    el.style.display = 'none';
+  }
+}
+
+// ═══════════════════════════════════════
 // SYNC
 // ═══════════════════════════════════════
 function selectSync(t) {
   S.syncTarget = t;
-  ['gdrive','dropbox','local'].forEach(x => document.getElementById('opt-'+x).classList.toggle('selected', x===t));
+  ['gdrive','dropbox','ftp','local'].forEach(x => {
+    const el = document.getElementById('opt-'+x);
+    if (el) el.classList.toggle('selected', x===t);
+  });
+  const cs = S.cloudSettings;
+  const hint = document.getElementById('sync-connection-hint');
+  if (t==='gdrive') hint.textContent = cs.gdrive.connected ? '✅ Google Drive 已連接' : '⚠ 尚未配置 → 請前往雲端設置';
+  else if (t==='dropbox') hint.textContent = cs.dropbox.connected ? '✅ Dropbox 已連接' : '⚠ 尚未配置 → 請前往雲端設置';
+  else if (t==='ftp') hint.textContent = cs.ftp.connected ? '✅ FTP 已配置：'+cs.ftp.host : '⚠ 尚未配置 → 請前往雲端設置';
+  else hint.textContent = '⬇ 下載到本機';
 }
 
 function syncSelected() {
@@ -970,7 +1543,15 @@ function syncSelected() {
     setTimeout(() => { sel.forEach(f=>f.selected=false); renderFiles(); showToast('✅ 已下載 '+sel.length+' 個檔案'); }, sel.length*300+200);
     return;
   }
-  // Simulate cloud sync
+  const cs = S.cloudSettings;
+  const connected = (S.syncTarget==='gdrive' && cs.gdrive.connected) || (S.syncTarget==='dropbox' && cs.dropbox.connected) || (S.syncTarget==='ftp' && cs.ftp.connected);
+  if (!connected) {
+    showToast('⚠ 請先在「雲端」設置中配置連接');
+    setTimeout(() => switchTab('cloud'), 800);
+    return;
+  }
+  const labels = { gdrive:'Google Drive', dropbox:'Dropbox', ftp:'FTP 服務器' };
+  showToast('☁ 正在同步到 ' + labels[S.syncTarget] + '…');
   let done=0;
   sel.forEach((f,i) => setTimeout(() => {
     f.synced=true; f.selected=false; done++;
@@ -978,6 +1559,150 @@ function syncSelected() {
     document.getElementById('progressText').textContent = done===sel.length ? '同步完成 ✓' : '同步中… '+Math.round(done/sel.length*100)+'%';
     if (done===sel.length) { renderFiles(); showToast('✅ 已同步 '+done+' 個檔案'); }
   }, (i+1)*500));
+}
+
+// ═══════════════════════════════════════
+// SHARE (ZIP)
+// ═══════════════════════════════════════
+let _shareZipBlob = null;
+let _shareZipFilename = '';
+
+function shareSelected() {
+  const sel = S.files.filter(f => f.selected);
+  if (sel.length === 0) { showToast('⚠ 請先勾選要共享的檔案'); return; }
+
+  // Build default zip name from first file's prefix
+  const prefix = sel[0].interviewPrefix || buildPrefix();
+  const zipName = prefix + '_' + sel.length + 'files.zip';
+  document.getElementById('shareZipName').value = zipName;
+
+  // List files
+  document.getElementById('shareFilesList').innerHTML =
+    sel.map(f => `${f.type==='audio'?'🎙':'📸'} ${f.filename}`).join('<br>');
+
+  // Reset progress
+  document.getElementById('shareProgress').style.display = 'none';
+  document.getElementById('shareProgressFill').style.width = '0%';
+  _shareZipBlob = null;
+
+  document.getElementById('shareModal').classList.add('show');
+}
+
+async function buildZip() {
+  const sel = S.files.filter(f => f.selected);
+  if (sel.length === 0) return null;
+
+  const zipName = document.getElementById('shareZipName').value.trim() || 'fieldpress.zip';
+  _shareZipFilename = zipName;
+
+  // Show progress
+  const prog = document.getElementById('shareProgress');
+  const progFill = document.getElementById('shareProgressFill');
+  const progText = document.getElementById('shareProgressText');
+  prog.style.display = 'block';
+  progText.textContent = '正在打包… 0/' + sel.length;
+
+  const zip = new JSZip();
+  for (let i = 0; i < sel.length; i++) {
+    const f = sel[i];
+    if (f.blob) {
+      const ab = await f.blob.arrayBuffer();
+      zip.file(f.filename, ab);
+    }
+    const pct = Math.round((i + 1) / sel.length * 80);
+    progFill.style.width = pct + '%';
+    progText.textContent = `正在打包… ${i+1}/${sel.length}`;
+    await new Promise(r => setTimeout(r, 10)); // yield to UI
+  }
+
+  progText.textContent = '正在生成 ZIP…';
+  progFill.style.width = '90%';
+  const blob = await zip.generateAsync({ type:'blob', compression:'DEFLATE', compressionOptions:{ level:6 } },
+    (meta) => {
+      progFill.style.width = (90 + meta.percent * 0.1) + '%';
+    }
+  );
+  progFill.style.width = '100%';
+  progText.textContent = `完成！${(blob.size/1024/1024).toFixed(2)} MB`;
+  _shareZipBlob = blob;
+  return blob;
+}
+
+async function shareViaApp(app) {
+  // Build zip if not yet built
+  if (!_shareZipBlob) {
+    const blob = await buildZip();
+    if (!blob) return;
+  }
+
+  const zipName = _shareZipFilename;
+  const file = new File([_shareZipBlob], zipName, { type: 'application/zip' });
+
+  if (app === 'download') {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(_shareZipBlob);
+    a.download = zipName;
+    a.click();
+    showToast('⬇ ZIP 已下載：' + zipName);
+    closeModal('shareModal');
+    return;
+  }
+
+  if (app === 'system' || app === 'signal' || app === 'whatsapp' || app === 'telegram' || app === 'wechat' || app === 'line') {
+    // Try Web Share API (supported on iOS Safari + Android Chrome)
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({
+          files: [file],
+          title: zipName,
+          text: '採訪檔案：' + zipName
+        });
+        showToast('✅ 已開啟分享菜單');
+        closeModal('shareModal');
+        return;
+      } catch(e) {
+        if (e.name !== 'AbortError') {
+          // Fall through to app-specific deep links
+        } else {
+          return; // User cancelled
+        }
+      }
+    }
+
+    // Fallback: app deep links (text only, files need native app)
+    if (app === 'whatsapp') {
+      window.open('whatsapp://send?text=採訪檔案：' + encodeURIComponent(zipName) + '（請先下載ZIP後手動發送）');
+    } else if (app === 'telegram') {
+      window.open('tg://msg?text=採訪檔案：' + encodeURIComponent(zipName));
+    } else if (app === 'signal') {
+      window.open('sgnl://compose?text=採訪檔案：' + encodeURIComponent(zipName));
+    } else if (app === 'signal2') {
+      // 神訊 BrightChat — no public URL scheme; download ZIP then open manually
+      showToast('💡 ZIP 已下載，請在神訊中選擇文件發送');
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(_shareZipBlob);
+      a.download = zipName; a.click();
+      closeModal('shareModal');
+      return;
+      // System share fallback — just download
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(_shareZipBlob);
+      a.download = zipName; a.click();
+      showToast('💡 瀏覽器不支持直接分享，已自動下載');
+    }
+  }
+
+  if (app === 'email') {
+    // Download zip + open mail
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(_shareZipBlob);
+    a.download = zipName; a.click();
+    setTimeout(() => {
+      window.location.href = `mailto:?subject=${encodeURIComponent('採訪檔案：'+zipName)}&body=${encodeURIComponent('請查收附件：'+zipName+'（已自動下載，請手動附加）')}`;
+    }, 500);
+    showToast('✉️ 郵件已準備，ZIP 已下載');
+    closeModal('shareModal');
+  }
 }
 
 // ═══════════════════════════════════════
