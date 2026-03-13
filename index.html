@@ -135,33 +135,54 @@ input:checked + .toggle-slider:before { transform:translateX(20px); }
 /* FULLSCREEN CAMERA */
 .camera-fullscreen {
   display:none; position:fixed; inset:0; background:#000; z-index:500;
-  flex-direction:column;
 }
-.camera-fullscreen.show { display:flex; }
-.camera-fs-video { flex:1; width:100%; object-fit:cover; }
+.camera-fullscreen.show { display:block; }
+.camera-fs-video {
+  position:absolute; inset:0; width:100%; height:100%; object-fit:cover;
+}
 .camera-fs-bar {
-  background:rgba(0,0,0,0.85); padding:16px 20px 32px;
+  position:absolute; bottom:0; left:0; right:0;
+  background:linear-gradient(transparent, rgba(0,0,0,0.75));
+  padding:30px 20px 48px;
   display:flex; align-items:center; justify-content:space-between;
+  z-index:10;
 }
 .camera-fs-close {
-  color:white; font-size:28px; cursor:pointer; padding:8px; line-height:1;
-}
-.camera-fs-shutter {
-  width:72px; height:72px; border-radius:50%; border:4px solid white;
-  background:white; cursor:pointer; transition:transform 0.1s, background 0.1s;
+  position:absolute; top:16px; left:16px; z-index:11;
+  color:white; font-size:26px; cursor:pointer; padding:8px; line-height:1;
+  background:rgba(0,0,0,0.4); border-radius:50%; width:42px; height:42px;
   display:flex; align-items:center; justify-content:center;
 }
-.camera-fs-shutter:active { transform:scale(0.92); background:#ddd; }
+.camera-fs-shutter {
+  width:76px; height:76px; border-radius:50%; border:4px solid white;
+  background:rgba(255,255,255,0.25); cursor:pointer;
+  transition:transform 0.1s, background 0.1s;
+  display:flex; align-items:center; justify-content:center;
+  backdrop-filter:blur(4px);
+}
+.camera-fs-shutter:active { transform:scale(0.92); background:rgba(255,255,255,0.5); }
+.camera-fs-shutter-inner {
+  width:58px; height:58px; border-radius:50%; background:white;
+}
 .camera-fs-flash {
   display:flex; flex-direction:column; align-items:center; gap:4px;
   color:white; font-size:11px; font-family:'IBM Plex Mono',monospace; cursor:pointer;
+  background:rgba(0,0,0,0.35); padding:10px 12px; border-radius:12px;
+  backdrop-filter:blur(4px);
 }
-.camera-fs-flash-icon { font-size:24px; }
-.camera-fs-flash.off { opacity:0.4; }
+.camera-fs-flash-icon { font-size:22px; }
+.camera-fs-flash.off { opacity:0.45; }
 .camera-fs-filename {
-  position:absolute; top:14px; left:0; right:0; text-align:center;
-  font-family:'IBM Plex Mono',monospace; font-size:11px; color:rgba(255,255,255,0.7);
-  pointer-events:none;
+  position:absolute; top:68px; left:0; right:0; text-align:center; z-index:11;
+  font-family:'IBM Plex Mono',monospace; font-size:11px;
+  color:rgba(255,255,255,0.75); pointer-events:none;
+  text-shadow:0 1px 3px rgba(0,0,0,0.8);
+}
+.camera-fs-live-badge {
+  position:absolute; top:16px; right:16px; z-index:11;
+  background:rgba(255,180,0,0.85); color:#000;
+  font-size:10px; font-weight:700; font-family:'IBM Plex Mono',monospace;
+  padding:4px 10px; border-radius:20px; display:none;
 }
 .camera-flash-overlay {
   display:none; position:fixed; inset:0; background:white; z-index:600; pointer-events:none;
@@ -383,12 +404,14 @@ canvas { display:none; }
 
 <!-- FULLSCREEN CAMERA OVERLAY -->
 <div class="camera-fullscreen" id="cameraFullscreen">
-  <div class="camera-fs-filename" id="cameraFsFilename"></div>
   <video id="preview-video" autoplay playsinline class="camera-fs-video"></video>
+  <div class="camera-fs-close" onclick="closeCamera()">✕</div>
+  <div class="camera-fs-filename" id="cameraFsFilename"></div>
+  <div class="camera-fs-live-badge" id="liveBadge">● LIVE</div>
   <div class="camera-fs-bar">
-    <div class="camera-fs-close" onclick="closeCamera()">✕</div>
+    <div style="width:60px"></div>
     <div class="camera-fs-shutter" onclick="capturePhoto()">
-      <div style="width:56px;height:56px;border-radius:50%;border:2px solid #aaa;background:white"></div>
+      <div class="camera-fs-shutter-inner"></div>
     </div>
     <div class="camera-fs-flash" id="fsFlashBtn" onclick="toggleFsFlash()">
       <span class="camera-fs-flash-icon">⚡</span>
@@ -1024,12 +1047,28 @@ async function startCamera() {
     });
     const video = document.getElementById('preview-video');
     video.srcObject = S.camera.stream;
-    // Update fullscreen filename label
     document.getElementById('cameraFsFilename').textContent = buildPrefix() + '-' + (S.photoCount+1) + '.jpg';
-    // Show flash btn state
     updateFsFlashUI();
+
+    // Detect Live Photo support (iOS 17+ with ImageCapture API)
+    S.camera.liveSupported = false;
+    try {
+      const track = S.camera.stream.getVideoTracks()[0];
+      if (window.ImageCapture) {
+        const ic = new ImageCapture(track);
+        const caps = await ic.getPhotoCapabilities().catch(()=>null);
+        if (caps && caps.livePhotoMode && caps.livePhotoMode !== 'none') {
+          S.camera.liveSupported = true;
+          S.camera.imageCapture = ic;
+        }
+      }
+    } catch(e) {}
+
+    const liveBadge = document.getElementById('liveBadge');
+    liveBadge.style.display = S.camera.liveSupported ? 'block' : 'none';
+
     document.getElementById('cameraFullscreen').classList.add('show');
-    showToast('📷 點擊快門拍攝');
+    showToast(S.camera.liveSupported ? '📷 已就緒（支持 Live Photo）' : '📷 相機已就緒');
   } catch(e) {
     showToast('❌ 無法訪問相機：' + e.message);
   }
@@ -1081,23 +1120,33 @@ async function capturePhoto() {
   const video = document.getElementById('preview-video');
   if (!video.srcObject) return;
 
-  // Turn on torch if enabled
   if (S.camera.flashEnabled) await setTorch(true);
-
-  // Flash white overlay effect
   doFlashEffect();
 
+  // Try Live Photo via ImageCapture API
+  if (S.camera.liveSupported && S.camera.imageCapture) {
+    try {
+      const blob = await S.camera.imageCapture.takePhoto({
+        imageWidth: 1920, imageHeight: 1080
+      });
+      if (S.camera.flashEnabled) setTimeout(() => setTorch(false), 400);
+      savePhotoFile(blob);
+      document.getElementById('cameraFsFilename').textContent = buildPrefix() + '-' + (S.photoCount+1) + '.jpg';
+      return;
+    } catch(e) {
+      // Fall through to canvas capture
+    }
+  }
+
+  // Standard canvas capture
   const canvas = document.getElementById('photoCanvas');
   canvas.width = video.videoWidth || 1280;
   canvas.height = video.videoHeight || 720;
   canvas.getContext('2d').drawImage(video, 0, 0);
-
-  // Turn off torch after shot
   if (S.camera.flashEnabled) setTimeout(() => setTorch(false), 400);
 
   canvas.toBlob(blob => {
     savePhotoFile(blob);
-    // Update filename label for next shot
     document.getElementById('cameraFsFilename').textContent = buildPrefix() + '-' + (S.photoCount+1) + '.jpg';
   }, 'image/jpeg', 0.93);
 }
