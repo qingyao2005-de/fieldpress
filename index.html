@@ -138,10 +138,39 @@ input:checked + .toggle-slider:before { transform:translateX(20px); }
   background:#000; z-index:500; overflow:hidden;
 }
 .camera-fullscreen.show { display:block; }
+/* Video constrained to 3:2, centered with black bars */
 .camera-fs-video {
-  position:absolute; top:0; left:0; right:0; bottom:0;
-  width:100%; height:100%; object-fit:cover; z-index:1;
+  position:absolute;
+  top:50%; left:50%;
+  transform:translate(-50%,-50%);
+  /* In portrait: width = 100vw, height = 100vw * 2/3 */
+  width:100%; height:calc(100vw * 2 / 3);
+  /* In landscape: height = 100vh, width = 100vh * 3/2 — handled below */
+  max-width:none;
+  object-fit:cover; z-index:1;
 }
+@media (orientation: landscape) {
+  .camera-fs-video {
+    height:100%; width:calc(100vh * 3 / 2);
+  }
+}
+/* Semi-transparent black mask outside the 3:2 frame */
+.camera-fs-mask-top,
+.camera-fs-mask-bottom {
+  position:absolute; left:0; right:0; z-index:2;
+  background:rgba(0,0,0,0.82); pointer-events:none;
+}
+.camera-fs-mask-top    { top:0; }
+.camera-fs-mask-bottom { bottom:0; }
+/* Height of masks = (screen height - video height) / 2 */
+/* Computed via JS on open; defaults for portrait */
+.camera-fs-mask-sides-left,
+.camera-fs-mask-sides-right {
+  position:absolute; top:0; bottom:0; z-index:2;
+  background:rgba(0,0,0,0.82); pointer-events:none; display:none;
+}
+.camera-fs-mask-sides-left  { left:0; }
+.camera-fs-mask-sides-right { right:0; }
 .camera-ui {
   position:absolute; top:0; left:0; right:0; bottom:0; z-index:10;
   pointer-events:none;
@@ -451,6 +480,11 @@ canvas { display:none; }
 <!-- FULLSCREEN CAMERA OVERLAY -->
 <div class="camera-fullscreen" id="cameraFullscreen">
   <video id="preview-video" autoplay playsinline muted class="camera-fs-video"></video>
+  <!-- Black masks to enforce 3:2 framing -->
+  <div class="camera-fs-mask-top"    id="camMaskTop"></div>
+  <div class="camera-fs-mask-bottom" id="camMaskBottom"></div>
+  <div class="camera-fs-mask-sides-left"  id="camMaskLeft"></div>
+  <div class="camera-fs-mask-sides-right" id="camMaskRight"></div>
   <div class="camera-flash-overlay" id="flashOverlay"></div>
   <div class="camera-ui" id="cameraUI">
     <div class="camera-fs-close" onclick="closeCamera()">✕</div>
@@ -1109,6 +1143,33 @@ function updatePhotoPanel() {
 // ═══════════════════════════════════════
 // VOLUME KEY SHUTTER
 // ═══════════════════════════════════════
+function updateCameraMasks() {
+  const sw = window.innerWidth, sh = window.innerHeight;
+  const isLandscape = sw > sh;
+  const mt = document.getElementById('camMaskTop');
+  const mb = document.getElementById('camMaskBottom');
+  const ml = document.getElementById('camMaskLeft');
+  const mr = document.getElementById('camMaskRight');
+  if (!mt) return;
+  if (!isLandscape) {
+    // Portrait: video width=sw, video height=sw*2/3
+    const vh = Math.round(sw * 2 / 3);
+    const gap = Math.max(0, (sh - vh) / 2);
+    mt.style.height = gap + 'px'; mb.style.height = gap + 'px';
+    ml.style.display = mr.style.display = 'none';
+  } else {
+    // Landscape: video height=sh, video width=sh*3/2
+    mt.style.height = mb.style.height = '0px';
+    const vw = Math.round(sh * 3 / 2);
+    const gap = Math.max(0, (sw - vw) / 2);
+    if (gap > 0) {
+      ml.style.width = mr.style.width = gap + 'px';
+      ml.style.display = mr.style.display = 'block';
+    } else {
+      ml.style.display = mr.style.display = 'none';
+    }
+  }
+}
 function _onVolumeKey(e) {
   // Only active when camera is open
   if (!document.getElementById('cameraFullscreen').classList.contains('show')) return;
@@ -1130,10 +1191,8 @@ async function startCamera() {
     S.camera.stream = await navigator.mediaDevices.getUserMedia({
       video: {
         facingMode: 'environment',
-        // Request viewfinder stream — device picks best preview size
-        // High-res stills come from ImageCapture.takePhoto(), not the video frame
-        width:  { ideal: 1920 },
-        height: { ideal: 1440 },
+        width:  { ideal: 4096 },
+        height: { ideal: 3072 },
       }
     });
     const video = document.getElementById('preview-video');
@@ -1171,6 +1230,8 @@ async function startCamera() {
 
     document.getElementById('liveBadge').style.display = S.camera.liveSupported ? 'block' : 'none';
     document.getElementById('cameraFullscreen').classList.add('show');
+    updateCameraMasks();
+    window.addEventListener('resize', updateCameraMasks);
     window.addEventListener('keydown', _onVolumeKey, { capture: true });
 
     const mpLabel = S.camera.maxPhotoWidth
@@ -1188,6 +1249,7 @@ function closeCamera() {
   document.getElementById('preview-video').style.transform = '';
   document.getElementById('cameraFullscreen').classList.remove('show');
 
+  window.removeEventListener('resize', updateCameraMasks);
   // Remove volume listener
   window.removeEventListener('keydown', _onVolumeKey, { capture: true });
 }
@@ -1309,13 +1371,16 @@ async function capturePhoto() {
     if (srcH > vh) { srcH = vh; srcW = Math.round(vh * 3 / 2); }
     srcX = Math.round((vw - srcW) / 2); srcY = Math.round((vh - srcH) / 2);
     canvas.width = srcW; canvas.height = srcH;
-    canvas.getContext('2d').drawImage(video, srcX, srcY, srcW, srcH, 0, 0, srcW, srcH);
+    const ctx = canvas.getContext('2d');
+    ctx.filter = 'saturate(1.35) contrast(1.12) brightness(1.04)';
+    ctx.drawImage(video, srcX, srcY, srcW, srcH, 0, 0, srcW, srcH);
   } else {
     const ew = vh, eh = vw;
     srcW = ew; srcH = Math.round(ew * 2 / 3);
     if (srcH > eh) { srcH = eh; srcW = Math.round(eh * 3 / 2); }
     canvas.width = srcW; canvas.height = srcH;
     const ctx = canvas.getContext('2d');
+    ctx.filter = 'saturate(1.35) contrast(1.12) brightness(1.04)';
     ctx.save();
     ctx.translate(srcW / 2, srcH / 2); ctx.rotate(Math.PI / 2);
     ctx.drawImage(video,
@@ -1335,25 +1400,39 @@ function cropTo3x2Landscape(inputBlob, callback) {
     URL.revokeObjectURL(url);
     const iw = img.naturalWidth, ih = img.naturalHeight;
     const canvas = document.getElementById('photoCanvas');
-    let srcX, srcY, srcW, srcH;
-    // Pick the longest dimension as the width (landscape)
+
+    // Always output landscape 3:2 — longest side is width
     const lw = Math.max(iw, ih), lh = Math.min(iw, ih);
-    srcW = lw; srcH = Math.round(lw * 2 / 3);
-    if (srcH > lh) { srcH = lh; srcW = Math.round(lh * 3 / 2); }
-    canvas.width = srcW; canvas.height = srcH;
+    let outW = lw, outH = Math.round(lw * 2 / 3);
+    if (outH > lh) { outH = lh; outW = Math.round(lh * 3 / 2); }
+    // Ensure exact 3:2 (handle rounding)
+    if (outW % 2 !== 0) outW--;
+    outH = Math.round(outW * 2 / 3);
+
+    canvas.width = outW; canvas.height = outH;
     const ctx = canvas.getContext('2d');
+
+    // Apply "Vivid" filter: boost saturation + contrast + slight sharpening via shadow
+    ctx.filter = 'saturate(1.35) contrast(1.12) brightness(1.04)';
+
     if (iw >= ih) {
-      srcX = Math.round((iw - srcW) / 2); srcY = Math.round((ih - srcH) / 2);
-      ctx.drawImage(img, srcX, srcY, srcW, srcH, 0, 0, srcW, srcH);
+      // Already landscape — centre-crop to 3:2
+      const srcX = Math.round((iw - outW) / 2);
+      const srcY = Math.round((ih - outH) / 2);
+      ctx.drawImage(img, srcX, srcY, outW, outH, 0, 0, outW, outH);
     } else {
+      // Portrait → rotate 90° CCW so landscape side becomes width
       ctx.save();
-      ctx.translate(srcW / 2, srcH / 2);
+      ctx.translate(outW / 2, outH / 2);
       ctx.rotate(Math.PI / 2);
-      ctx.drawImage(img, Math.round((iw - srcH) / 2), Math.round((ih - srcW) / 2),
-        srcH, srcW, -srcH / 2, -srcW / 2, srcH, srcW);
+      // After rotation canvas axes: outH wide, outW tall (in rotated space)
+      const srcX = Math.round((iw - outH) / 2);
+      const srcY = Math.round((ih - outW) / 2);
+      ctx.drawImage(img, srcX, srcY, outH, outW, -outH / 2, -outW / 2, outH, outW);
       ctx.restore();
     }
-    canvas.toBlob(callback, 'image/jpeg', 0.93);
+
+    canvas.toBlob(callback, 'image/jpeg', 0.95);
   };
   img.src = url;
 }
@@ -1447,7 +1526,6 @@ function toggleSelectAll() {
 // ═══════════════════════════════════════
 let _pvList = [];   // files available for swipe in current context
 let _pvIndex = 0;   // current index in _pvList
-let _pvTouchX = 0;
 
 function previewFile(id, contextList) {
   // contextList: optional array of file ids to swipe through
@@ -1459,6 +1537,7 @@ function previewFile(id, contextList) {
   }
   _pvIndex = _pvList.indexOf(id);
   if (_pvIndex < 0) { _pvList = [id]; _pvIndex = 0; }
+  _pvZoom = 1; _pvPanX = 0; _pvPanY = 0;
   _pvRender();
   document.getElementById('previewModal').classList.add('show');
 }
@@ -1483,7 +1562,8 @@ function _pvRender() {
   if (f.type === 'photo') {
     const img = document.createElement('img');
     img.src = f.previewUrl;
-    img.style.cssText = 'max-width:100%;max-height:100%;object-fit:contain;border-radius:4px';
+    img.style.cssText = 'max-width:100%;max-height:100%;object-fit:contain;border-radius:4px;touch-action:none;cursor:zoom-in;user-select:none';
+    img.ondblclick = () => { _pvZoom > 1 ? _pvResetZoom() : (_pvZoom=2.5,_pvApplyTransform()); };
     content.appendChild(img);
   } else {
     const wrap = document.createElement('div');
@@ -1515,6 +1595,7 @@ function previewNav(dir) {
   const newIdx = _pvIndex + dir;
   if (newIdx < 0 || newIdx >= _pvList.length) return;
   _pvIndex = newIdx;
+  _pvZoom = 1; _pvPanX = 0; _pvPanY = 0;
   // Animate slide
   const content = document.getElementById('previewContent');
   content.style.transition = 'none';
@@ -1528,11 +1609,89 @@ function previewNav(dir) {
   }, 60);
 }
 
-function pvTouchStart(e) { _pvTouchX = e.touches[0].clientX; }
-function pvTouchMove(e) { e.preventDefault(); }
+// ── Preview touch: swipe left/right to navigate, pinch to zoom ──
+let _pvTouchX = 0;
+let _pvPinching = false;
+let _pvPinchStart = 0;
+let _pvZoom = 1;
+let _pvZoomOriginX = 0;
+let _pvZoomOriginY = 0;
+let _pvPanX = 0;
+let _pvPanY = 0;
+let _pvPanStartX = 0;
+let _pvPanStartY = 0;
+
+function _pvGetImg() {
+  return document.querySelector('#previewContent img');
+}
+
+function _pvApplyTransform() {
+  const img = _pvGetImg();
+  if (!img) return;
+  img.style.transition = 'none';
+  img.style.transform = `translate(${_pvPanX}px,${_pvPanY}px) scale(${_pvZoom})`;
+  img.style.transformOrigin = 'center center';
+}
+
+function _pvResetZoom() {
+  _pvZoom = 1; _pvPanX = 0; _pvPanY = 0;
+  const img = _pvGetImg();
+  if (img) {
+    img.style.transition = 'transform 0.25s ease';
+    img.style.transform = 'translate(0,0) scale(1)';
+  }
+}
+
+function pvTouchStart(e) {
+  if (e.touches.length === 1) {
+    _pvTouchX = e.touches[0].clientX;
+    _pvPanStartX = e.touches[0].clientX - _pvPanX;
+    _pvPanStartY = e.touches[0].clientY - _pvPanY;
+    _pvPinching = false;
+  } else if (e.touches.length === 2) {
+    _pvPinching = true;
+    const dx = e.touches[0].clientX - e.touches[1].clientX;
+    const dy = e.touches[0].clientY - e.touches[1].clientY;
+    _pvPinchStart = Math.hypot(dx, dy);
+    // Midpoint as zoom origin
+    _pvZoomOriginX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+    _pvZoomOriginY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+  }
+}
+
+function pvTouchMove(e) {
+  e.preventDefault();
+  if (e.touches.length === 2 && _pvPinching) {
+    const dx = e.touches[0].clientX - e.touches[1].clientX;
+    const dy = e.touches[0].clientY - e.touches[1].clientY;
+    const dist = Math.hypot(dx, dy);
+    const newZoom = Math.min(8, Math.max(1, _pvZoom * (dist / _pvPinchStart)));
+    _pvZoom = newZoom;
+    _pvPinchStart = dist;
+    _pvApplyTransform();
+  } else if (e.touches.length === 1 && !_pvPinching) {
+    if (_pvZoom > 1) {
+      // Pan while zoomed
+      _pvPanX = e.touches[0].clientX - _pvPanStartX;
+      _pvPanY = e.touches[0].clientY - _pvPanStartY;
+      _pvApplyTransform();
+    }
+  }
+}
+
 function pvTouchEnd(e) {
-  const dx = e.changedTouches[0].clientX - _pvTouchX;
-  if (Math.abs(dx) > 50) previewNav(dx < 0 ? 1 : -1);
+  if (_pvPinching && e.touches.length < 2) {
+    _pvPinching = false;
+    // Snap back to 1x if barely zoomed
+    if (_pvZoom < 1.15) _pvResetZoom();
+    return;
+  }
+  if (!_pvPinching && _pvZoom <= 1) {
+    const dx = e.changedTouches[0].clientX - _pvTouchX;
+    if (Math.abs(dx) > 50) {
+      previewNav(dx < 0 ? 1 : -1);
+    }
+  }
 }
 
 function pvToggleSelect() {
