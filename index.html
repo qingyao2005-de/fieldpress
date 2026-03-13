@@ -142,15 +142,22 @@ input:checked + .toggle-slider:before { transform:translateX(20px); }
   position:absolute; top:0; left:0; right:0; bottom:0;
   width:100%; height:100%; object-fit:cover; z-index:1;
 }
-/* UI wrapper — just a transparent full-screen layer, no rotation */
 .camera-ui {
   position:absolute; top:0; left:0; right:0; bottom:0; z-index:10;
   pointer-events:none;
 }
-/* Each button rotates individually */
 .camera-ui * { pointer-events:all; }
-.cam-btn-rotate { transition:transform 0.35s ease; }
 
+/* ── PORTRAIT layout ── */
+/* Close: top-left */
+.camera-fs-close {
+  position:absolute; top:16px; left:16px;
+  color:white; font-size:20px; cursor:pointer;
+  background:rgba(0,0,0,0.45); border-radius:50%;
+  width:44px; height:44px;
+  display:flex; align-items:center; justify-content:center;
+  backdrop-filter:blur(4px);
+}
 /* Bottom gradient bar */
 .camera-fs-bar {
   position:absolute; bottom:0; left:0; right:0;
@@ -158,13 +165,10 @@ input:checked + .toggle-slider:before { transform:translateX(20px); }
   padding:24px 24px 52px;
   display:flex; align-items:center; justify-content:space-between;
 }
-/* Close button — top left */
-.camera-fs-close {
-  position:absolute; top:16px; left:16px;
-  color:white; font-size:22px; cursor:pointer; line-height:1;
-  background:rgba(0,0,0,0.45); border-radius:50%; width:44px; height:44px;
-  display:flex; align-items:center; justify-content:center;
-  backdrop-filter:blur(4px);
+/* Zoom buttons above shutter */
+.camera-fs-zoom-bar {
+  position:absolute; bottom:132px; left:0; right:0;
+  display:flex; align-items:center; justify-content:center; gap:10px;
 }
 /* Shutter */
 .camera-fs-shutter {
@@ -172,9 +176,9 @@ input:checked + .toggle-slider:before { transform:translateX(20px); }
   background:rgba(255,255,255,0.2); cursor:pointer;
   transition:transform 0.1s, background 0.1s;
   display:flex; align-items:center; justify-content:center;
-  backdrop-filter:blur(4px);
+  backdrop-filter:blur(4px); flex-shrink:0;
 }
-.camera-fs-shutter:active { transform:scale(0.9) !important; background:rgba(255,255,255,0.55); }
+.camera-fs-shutter:active { transform:scale(0.9); background:rgba(255,255,255,0.55); }
 .camera-fs-shutter.vol-flash { background:rgba(255,255,255,0.85) !important; }
 .camera-fs-shutter-inner { width:58px; height:58px; border-radius:50%; background:white; pointer-events:none; }
 /* Flash toggle */
@@ -186,18 +190,7 @@ input:checked + .toggle-slider:before { transform:translateX(20px); }
 }
 .camera-fs-flash-icon { font-size:22px; }
 .camera-fs-flash.off { opacity:0.45; }
-/* Live badge */
-.camera-fs-live-badge {
-  position:absolute; top:16px; right:16px;
-  background:rgba(255,180,0,0.88); color:#000;
-  font-size:10px; font-weight:700; font-family:'IBM Plex Mono',monospace;
-  padding:4px 10px; border-radius:20px; display:none; pointer-events:none;
-}
-/* Zoom bar */
-.camera-fs-zoom-bar {
-  position:absolute; bottom:132px; left:0; right:0;
-  display:flex; align-items:center; justify-content:center; gap:10px;
-}
+/* Zoom buttons */
 .camera-fs-zoom-btn {
   width:44px; height:44px; border-radius:50%;
   background:rgba(0,0,0,0.45); backdrop-filter:blur(6px);
@@ -210,8 +203,35 @@ input:checked + .toggle-slider:before { transform:translateX(20px); }
 .camera-fs-zoom-btn.active {
   background:rgba(255,200,0,0.88); color:#000; border-color:transparent;
 }
+/* Live badge */
+.camera-fs-live-badge {
+  position:absolute; top:16px; right:16px;
+  background:rgba(255,180,0,0.88); color:#000;
+  font-size:10px; font-weight:700; font-family:'IBM Plex Mono',monospace;
+  padding:4px 10px; border-radius:20px; display:none; pointer-events:none;
+}
 .camera-flash-overlay {
   display:none; position:absolute; inset:0; background:white; z-index:20; pointer-events:none;
+}
+
+/* ── LANDSCAPE layout ── */
+@media (orientation: landscape) {
+  /* Move bar to right side */
+  .camera-fs-bar {
+    top:0; bottom:0; right:0; left:auto;
+    width:110px;
+    background:linear-gradient(to left, rgba(0,0,0,0.72), transparent);
+    padding:0 16px 0 10px;
+    flex-direction:column; justify-content:center; gap:24px;
+  }
+  /* Zoom bar moves to left side */
+  .camera-fs-zoom-bar {
+    bottom:auto; left:0; right:auto; top:50%;
+    transform:translateY(-50%);
+    flex-direction:column;
+    width:70px;
+  }
+  /* Close stays top-left — no change needed */
 }
 
 .camera-area { background:var(--ink); border-radius:8px; overflow:hidden; margin-bottom:12px; position:relative; min-height:200px; display:flex; align-items:center; justify-content:center; }
@@ -433,18 +453,18 @@ canvas { display:none; }
   <video id="preview-video" autoplay playsinline muted class="camera-fs-video"></video>
   <div class="camera-flash-overlay" id="flashOverlay"></div>
   <div class="camera-ui" id="cameraUI">
-    <div class="camera-fs-close cam-btn-rotate" onclick="closeCamera()">✕</div>
-    <div class="camera-fs-live-badge cam-btn-rotate" id="liveBadge">● LIVE</div>
+    <div class="camera-fs-close" onclick="closeCamera()">✕</div>
+    <div class="camera-fs-live-badge" id="liveBadge">● LIVE</div>
     <div class="camera-fs-zoom-bar">
-      <div class="camera-fs-zoom-btn cam-btn-rotate active" id="zoom1x" onclick="setZoom(1)">1×</div>
-      <div class="camera-fs-zoom-btn cam-btn-rotate" id="zoom2x" onclick="setZoom(2)">2×</div>
+      <div class="camera-fs-zoom-btn active" id="zoom1x" onclick="setZoom(1)">1×</div>
+      <div class="camera-fs-zoom-btn" id="zoom2x" onclick="setZoom(2)">2×</div>
     </div>
     <div class="camera-fs-bar">
       <div style="width:60px"></div>
-      <div class="camera-fs-shutter cam-btn-rotate" id="cameraShutter" onclick="capturePhoto()">
+      <div class="camera-fs-shutter" id="cameraShutter" onclick="capturePhoto()">
         <div class="camera-fs-shutter-inner"></div>
       </div>
-      <div class="camera-fs-flash cam-btn-rotate" id="fsFlashBtn" onclick="toggleFsFlash()">
+      <div class="camera-fs-flash" id="fsFlashBtn" onclick="toggleFsFlash()">
         <span class="camera-fs-flash-icon">⚡</span>
         <span id="fsFlashLabel">閃光燈</span>
       </div>
@@ -1071,26 +1091,6 @@ function updatePhotoPanel() {
 }
 
 // ═══════════════════════════════════════
-// CAMERA ORIENTATION
-// ═══════════════════════════════════════
-function updateCameraOrientation() {
-  let angle = 0;
-  if (screen.orientation && screen.orientation.angle !== undefined) {
-    angle = screen.orientation.angle;
-  } else if (typeof window.orientation === 'number') {
-    angle = window.orientation;
-  }
-  // Counter-rotate each button to stay upright
-  // Device rotated right (landscape, volume up on top) → angle 90 → buttons rotate -90
-  // Device rotated left (landscape, volume up on bottom) → angle -90/270 → buttons rotate +90
-  let btnRotate = 0;
-  if (angle === 90)              btnRotate = -90;
-  else if (angle === -90 || angle === 270) btnRotate = 90;
-  const t = `rotate(${btnRotate}deg)`;
-  document.querySelectorAll('.cam-btn-rotate').forEach(el => el.style.transform = t);
-}
-
-// ═══════════════════════════════════════
 // VOLUME KEY SHUTTER
 // ═══════════════════════════════════════
 function _onVolumeKey(e) {
@@ -1143,11 +1143,6 @@ async function startCamera() {
 
     document.getElementById('cameraFullscreen').classList.add('show');
 
-    // Orientation tracking
-    updateCameraOrientation();
-    window.addEventListener('orientationchange', updateCameraOrientation);
-    if (screen.orientation) screen.orientation.addEventListener('change', updateCameraOrientation);
-
     // Volume key shutter
     window.addEventListener('keydown', _onVolumeKey, { capture: true });
 
@@ -1163,9 +1158,7 @@ function closeCamera() {
   document.getElementById('preview-video').style.transform = '';
   document.getElementById('cameraFullscreen').classList.remove('show');
 
-  // Remove orientation + volume listeners
-  window.removeEventListener('orientationchange', updateCameraOrientation);
-  if (screen.orientation) screen.orientation.removeEventListener('change', updateCameraOrientation);
+  // Remove volume listener
   window.removeEventListener('keydown', _onVolumeKey, { capture: true });
 }
 
