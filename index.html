@@ -91,8 +91,8 @@ header {
   padding:12px 14px; margin-bottom:14px;
 }
 .rec-filename-display {
-  font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--ink);
-  word-break:break-all; line-height:1.5; margin-bottom:6px;
+  font-family:'IBM Plex Mono',monospace; font-size:15px; color:var(--ink);
+  word-break:break-all; line-height:1.5; margin-bottom:6px; font-weight:500;
 }
 .rec-status-badge {
   display:inline-block; padding:3px 10px; border-radius:20px; font-size:11px;
@@ -646,8 +646,8 @@ canvas { display:none; }
     <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:rgba(0,0,0,0.6);flex-shrink:0">
       <button onclick="closeModal('previewModal')" style="background:none;border:none;color:white;font-size:22px;cursor:pointer;padding:4px">✕</button>
       <div style="flex:1;text-align:center;padding:0 10px">
-        <div id="previewTitle" style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:rgba(255,255,255,0.7);word-break:break-all;line-height:1.4"></div>
-        <div id="previewCounter" style="font-size:10px;color:rgba(255,255,255,0.4);margin-top:2px;font-family:'IBM Plex Mono',monospace"></div>
+        <div id="previewTitle" style="font-family:'IBM Plex Mono',monospace;font-size:14px;color:rgba(255,255,255,0.92);word-break:break-all;line-height:1.5;font-weight:500"></div>
+        <div id="previewCounter" style="font-size:11px;color:rgba(255,255,255,0.45);margin-top:3px;font-family:'IBM Plex Mono',monospace"></div>
       </div>
       <button onclick="closeModal('previewModal')" style="background:none;border:none;color:transparent;font-size:22px;padding:4px">✕</button>
     </div>
@@ -702,7 +702,7 @@ canvas { display:none; }
       ✂️ 去掉末尾序號
     </button>
     <div class="btn-row">
-      <button class="btn btn-success" onclick="confirmRename()">✅ 確認</button>
+      <button class="btn btn-success" onclick="confirmRename()">✅ 確認並選擇</button>
       <button class="btn btn-outline" onclick="closeModal('renameModal')">取消</button>
     </div>
   </div>
@@ -890,6 +890,18 @@ function _doNextInterview() {
   S.settingChanged = false;
   S.recording.sessionCount = 0;
   S.photoCount = 0;
+
+  // Clear file lists immediately
+  document.getElementById('recFilesList').innerHTML = '';
+  document.getElementById('photoThumbList').innerHTML = '';
+
+  // Show upcoming filenames
+  const nextPrefix = buildPrefix();
+  document.getElementById('recFilenameDisplay').textContent = nextPrefix + '.mp3';
+  document.getElementById('recStatusBadge').className = 'rec-status-badge status-idle';
+  document.getElementById('recStatusBadge').textContent = '待機';
+  document.getElementById('photoFilenameBar').textContent = nextPrefix + '-1.jpg';
+
   switchTab('record');
   showToast('🎙 採訪 #' + S.setup.seq + ' 開始！');
 }
@@ -1116,7 +1128,13 @@ async function startCamera() {
   try {
     if (S.camera.stream) S.camera.stream.getTracks().forEach(t => t.stop());
     S.camera.stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode:'environment', width:{ideal:1920}, height:{ideal:1080} }
+      video: {
+        facingMode: 'environment',
+        // Request viewfinder stream — device picks best preview size
+        // High-res stills come from ImageCapture.takePhoto(), not the video frame
+        width:  { ideal: 1920 },
+        height: { ideal: 1440 },
+      }
     });
     const video = document.getElementById('preview-video');
     video.srcObject = S.camera.stream;
@@ -1128,29 +1146,37 @@ async function startCamera() {
     document.getElementById('zoom2x').classList.remove('active');
     document.getElementById('preview-video').style.transform = '';
 
-    // Detect Live Photo support (iOS 17+ with ImageCapture API)
+    // Always init ImageCapture for maximum-resolution stills
+    S.camera.imageCapture = null;
+    S.camera.maxPhotoWidth = 0;
+    S.camera.maxPhotoHeight = 0;
     S.camera.liveSupported = false;
     try {
       const track = S.camera.stream.getVideoTracks()[0];
       if (window.ImageCapture) {
         const ic = new ImageCapture(track);
-        const caps = await ic.getPhotoCapabilities().catch(()=>null);
-        if (caps && caps.livePhotoMode && caps.livePhotoMode !== 'none') {
-          S.camera.liveSupported = true;
+        const caps = await ic.getPhotoCapabilities().catch(() => null);
+        if (caps) {
           S.camera.imageCapture = ic;
+          // Record max still resolution the sensor supports
+          S.camera.maxPhotoWidth  = caps.imageWidth?.max  || 0;
+          S.camera.maxPhotoHeight = caps.imageHeight?.max || 0;
+          // Check Live Photo
+          if (caps.livePhotoMode && caps.livePhotoMode !== 'none') {
+            S.camera.liveSupported = true;
+          }
         }
       }
     } catch(e) {}
 
-    const liveBadge = document.getElementById('liveBadge');
-    liveBadge.style.display = S.camera.liveSupported ? 'block' : 'none';
-
+    document.getElementById('liveBadge').style.display = S.camera.liveSupported ? 'block' : 'none';
     document.getElementById('cameraFullscreen').classList.add('show');
-
-    // Volume key shutter
     window.addEventListener('keydown', _onVolumeKey, { capture: true });
 
-    showToast(S.camera.liveSupported ? '📷 已就緒（支持 Live Photo）' : '📷 相機已就緒');
+    const mpLabel = S.camera.maxPhotoWidth
+      ? ` (${(S.camera.maxPhotoWidth * S.camera.maxPhotoHeight / 1e6).toFixed(0)}MP)`
+      : '';
+    showToast('📷 相機已就緒' + mpLabel);
   } catch(e) {
     showToast('❌ 無法訪問相機：' + e.message);
   }
@@ -1195,6 +1221,8 @@ async function setZoom(level) {
     const newStream = await navigator.mediaDevices.getUserMedia({
       video: {
         facingMode: 'environment',
+        width: { ideal: 1920 }, height: { ideal: 1280 },
+        aspectRatio: { ideal: 1.5 },
         zoom: level === 2 ? 2.0 : 1.0
       }
     });
@@ -1257,30 +1285,77 @@ async function capturePhoto() {
   if (S.camera.flashEnabled) await setTorch(true);
   doFlashEffect();
 
-  // Try Live Photo via ImageCapture API
-  if (S.camera.liveSupported && S.camera.imageCapture) {
+  // Use ImageCapture for full sensor resolution (24MP on iPhone 15 Pro = 8064×5376)
+  if (S.camera.imageCapture) {
     try {
-      const blob = await S.camera.imageCapture.takePhoto({
-        imageWidth: 1920, imageHeight: 1080
-      });
+      const opts = {};
+      if (S.camera.maxPhotoWidth)  opts.imageWidth  = S.camera.maxPhotoWidth;
+      if (S.camera.maxPhotoHeight) opts.imageHeight = S.camera.maxPhotoHeight;
+      const blob = await S.camera.imageCapture.takePhoto(opts);
       if (S.camera.flashEnabled) setTimeout(() => setTorch(false), 400);
-      savePhotoFile(blob);
+      cropTo3x2Landscape(blob, croppedBlob => savePhotoFile(croppedBlob));
       return;
-    } catch(e) {
-      // Fall through to canvas capture
-    }
+    } catch(e) { /* fall through to canvas */ }
   }
 
-  // Standard canvas capture
+  // Fallback: canvas capture from video frame (limited to stream resolution)
   const canvas = document.getElementById('photoCanvas');
-  canvas.width = video.videoWidth || 1280;
-  canvas.height = video.videoHeight || 720;
-  canvas.getContext('2d').drawImage(video, 0, 0);
-  if (S.camera.flashEnabled) setTimeout(() => setTorch(false), 400);
+  const vw = video.videoWidth  || 1280;
+  const vh = video.videoHeight || 853;
 
-  canvas.toBlob(blob => {
-    savePhotoFile(blob);
-  }, 'image/jpeg', 0.93);
+  let srcX, srcY, srcW, srcH;
+  if (vw >= vh) {
+    srcW = vw; srcH = Math.round(vw * 2 / 3);
+    if (srcH > vh) { srcH = vh; srcW = Math.round(vh * 3 / 2); }
+    srcX = Math.round((vw - srcW) / 2); srcY = Math.round((vh - srcH) / 2);
+    canvas.width = srcW; canvas.height = srcH;
+    canvas.getContext('2d').drawImage(video, srcX, srcY, srcW, srcH, 0, 0, srcW, srcH);
+  } else {
+    const ew = vh, eh = vw;
+    srcW = ew; srcH = Math.round(ew * 2 / 3);
+    if (srcH > eh) { srcH = eh; srcW = Math.round(eh * 3 / 2); }
+    canvas.width = srcW; canvas.height = srcH;
+    const ctx = canvas.getContext('2d');
+    ctx.save();
+    ctx.translate(srcW / 2, srcH / 2); ctx.rotate(Math.PI / 2);
+    ctx.drawImage(video,
+      Math.round((vw - srcH) / 2), Math.round((vh - srcW) / 2), srcH, srcW,
+      -srcH / 2, -srcW / 2, srcH, srcW);
+    ctx.restore();
+  }
+
+  if (S.camera.flashEnabled) setTimeout(() => setTorch(false), 400);
+  canvas.toBlob(blob => savePhotoFile(blob), 'image/jpeg', 0.95);
+}
+
+function cropTo3x2Landscape(inputBlob, callback) {
+  const img = new Image();
+  const url = URL.createObjectURL(inputBlob);
+  img.onload = () => {
+    URL.revokeObjectURL(url);
+    const iw = img.naturalWidth, ih = img.naturalHeight;
+    const canvas = document.getElementById('photoCanvas');
+    let srcX, srcY, srcW, srcH;
+    // Pick the longest dimension as the width (landscape)
+    const lw = Math.max(iw, ih), lh = Math.min(iw, ih);
+    srcW = lw; srcH = Math.round(lw * 2 / 3);
+    if (srcH > lh) { srcH = lh; srcW = Math.round(lh * 3 / 2); }
+    canvas.width = srcW; canvas.height = srcH;
+    const ctx = canvas.getContext('2d');
+    if (iw >= ih) {
+      srcX = Math.round((iw - srcW) / 2); srcY = Math.round((ih - srcH) / 2);
+      ctx.drawImage(img, srcX, srcY, srcW, srcH, 0, 0, srcW, srcH);
+    } else {
+      ctx.save();
+      ctx.translate(srcW / 2, srcH / 2);
+      ctx.rotate(Math.PI / 2);
+      ctx.drawImage(img, Math.round((iw - srcH) / 2), Math.round((ih - srcW) / 2),
+        srcH, srcW, -srcH / 2, -srcW / 2, srcH, srcW);
+      ctx.restore();
+    }
+    canvas.toBlob(callback, 'image/jpeg', 0.93);
+  };
+  img.src = url;
 }
 
 function handleFileInput(e) {
@@ -1589,11 +1664,13 @@ function confirmRename() {
   const newName = document.getElementById('renameInput').value.trim();
   if (!newName) { showToast('⚠ 文件名不能為空'); return; }
   f.filename = newName;
+  // Select file if not already selected
+  if (!f.selected) f.selected = true;
   closeModal('renameModal');
   renderFiles();
   renderRecFiles();
   renderPhotoThumbs();
-  showToast('✅ 已重命名：' + newName);
+  showToast('✅ 已重命名並選擇：' + newName);
 }
 
 // ═══════════════════════════════════════
