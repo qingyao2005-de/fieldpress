@@ -142,18 +142,31 @@ input:checked + .toggle-slider:before { transform:translateX(20px); }
   position:absolute; top:0; left:0; right:0; bottom:0;
   width:100%; height:100%; object-fit:cover; z-index:1;
 }
+/* Control wrapper — always covers the screen, children positioned inside */
+.camera-ui {
+  position:absolute; top:0; left:0; right:0; bottom:0; z-index:10;
+  transition:transform 0.35s ease;
+}
+/* Portrait: no rotation */
+.camera-ui.portrait  { transform:rotate(0deg); }
+/* Landscape-left (home button / power on right): counter-rotate -90 */
+.camera-ui.landscape-left  { transform:rotate(90deg); }
+/* Landscape-right: counter-rotate +90 */
+.camera-ui.landscape-right { transform:rotate(-90deg); }
+
 .camera-fs-bar {
   position:absolute; bottom:0; left:0; right:0;
-  background:linear-gradient(transparent, rgba(0,0,0,0.75));
-  padding:30px 20px 48px;
+  background:linear-gradient(transparent, rgba(0,0,0,0.78));
+  padding:28px 20px 48px;
   display:flex; align-items:center; justify-content:space-between;
-  z-index:10;
+  pointer-events:all;
 }
 .camera-fs-close {
-  position:absolute; top:16px; left:16px; z-index:11;
-  color:white; font-size:26px; cursor:pointer; padding:8px; line-height:1;
-  background:rgba(0,0,0,0.4); border-radius:50%; width:42px; height:42px;
+  position:absolute; top:16px; left:16px;
+  color:white; font-size:22px; cursor:pointer; line-height:1;
+  background:rgba(0,0,0,0.45); border-radius:50%; width:42px; height:42px;
   display:flex; align-items:center; justify-content:center;
+  backdrop-filter:blur(4px); pointer-events:all;
 }
 .camera-fs-shutter {
   width:76px; height:76px; border-radius:50%; border:4px solid white;
@@ -162,49 +175,50 @@ input:checked + .toggle-slider:before { transform:translateX(20px); }
   display:flex; align-items:center; justify-content:center;
   backdrop-filter:blur(4px);
 }
-.camera-fs-shutter:active { transform:scale(0.92); background:rgba(255,255,255,0.5); }
-.camera-fs-shutter-inner {
-  width:58px; height:58px; border-radius:50%; background:white;
-}
+.camera-fs-shutter:active { transform:scale(0.92); background:rgba(255,255,255,0.55); }
+/* Shutter visual flash on volume key */
+.camera-fs-shutter.vol-flash { background:rgba(255,255,255,0.85) !important; transform:scale(0.92) !important; }
+.camera-fs-shutter-inner { width:58px; height:58px; border-radius:50%; background:white; }
 .camera-fs-flash {
   display:flex; flex-direction:column; align-items:center; gap:4px;
   color:white; font-size:11px; font-family:'IBM Plex Mono',monospace; cursor:pointer;
   background:rgba(0,0,0,0.35); padding:10px 12px; border-radius:12px;
-  backdrop-filter:blur(4px);
+  backdrop-filter:blur(4px); pointer-events:all;
 }
 .camera-fs-flash-icon { font-size:22px; }
 .camera-fs-flash.off { opacity:0.45; }
 .camera-fs-filename {
-  position:absolute; top:68px; left:0; right:0; text-align:center; z-index:11;
+  position:absolute; top:66px; left:0; right:0; text-align:center;
   font-family:'IBM Plex Mono',monospace; font-size:11px;
   color:rgba(255,255,255,0.75); pointer-events:none;
-  text-shadow:0 1px 3px rgba(0,0,0,0.8);
+  text-shadow:0 1px 4px rgba(0,0,0,0.9);
 }
 .camera-fs-live-badge {
-  position:absolute; top:16px; right:16px; z-index:10;
-  background:rgba(255,180,0,0.85); color:#000;
+  position:absolute; top:16px; right:16px;
+  background:rgba(255,180,0,0.88); color:#000;
   font-size:10px; font-weight:700; font-family:'IBM Plex Mono',monospace;
-  padding:4px 10px; border-radius:20px; display:none;
+  padding:4px 10px; border-radius:20px; display:none; pointer-events:none;
 }
 .camera-fs-zoom-bar {
-  position:absolute; bottom:130px; left:0; right:0;
-  display:flex; align-items:center; justify-content:center; gap:10px; z-index:10;
+  position:absolute; bottom:128px; left:0; right:0;
+  display:flex; align-items:center; justify-content:center; gap:10px;
+  pointer-events:all;
 }
 .camera-fs-zoom-btn {
   width:44px; height:44px; border-radius:50%;
   background:rgba(0,0,0,0.45); backdrop-filter:blur(6px);
   border:1.5px solid rgba(255,255,255,0.3);
-  color:rgba(255,255,255,0.8); font-size:13px; font-weight:700;
+  color:rgba(255,255,255,0.85); font-size:13px; font-weight:700;
   font-family:'IBM Plex Mono',monospace;
   display:flex; align-items:center; justify-content:center;
   cursor:pointer; transition:all 0.18s;
 }
 .camera-fs-zoom-btn.active {
-  background:rgba(255,200,0,0.85); color:#000;
+  background:rgba(255,200,0,0.88); color:#000;
   border-color:transparent; transform:scale(1.12);
 }
 .camera-flash-overlay {
-  display:none; position:fixed; inset:0; background:white; z-index:600; pointer-events:none;
+  display:none; position:absolute; inset:0; background:white; z-index:20; pointer-events:none;
 }
 
 .camera-area { background:var(--ink); border-radius:8px; overflow:hidden; margin-bottom:12px; position:relative; min-height:200px; display:flex; align-items:center; justify-content:center; }
@@ -424,26 +438,31 @@ canvas { display:none; }
 <!-- FULLSCREEN CAMERA OVERLAY -->
 <div class="camera-fullscreen" id="cameraFullscreen">
   <video id="preview-video" autoplay playsinline muted class="camera-fs-video"></video>
-  <div class="camera-fs-close" onclick="closeCamera()">✕</div>
-  <div class="camera-fs-filename" id="cameraFsFilename"></div>
-  <div class="camera-fs-live-badge" id="liveBadge">● LIVE</div>
-  <!-- Zoom selector -->
-  <div class="camera-fs-zoom-bar">
-    <div class="camera-fs-zoom-btn active" id="zoom1x" onclick="setZoom(1)">1×</div>
-    <div class="camera-fs-zoom-btn" id="zoom2x" onclick="setZoom(2)">2×</div>
-  </div>
-  <div class="camera-fs-bar">
-    <div style="width:60px"></div>
-    <div class="camera-fs-shutter" onclick="capturePhoto()">
-      <div class="camera-fs-shutter-inner"></div>
+  <div class="camera-flash-overlay" id="flashOverlay"></div>
+
+  <!-- All controls in one wrapper that counter-rotates in landscape -->
+  <div class="camera-ui" id="cameraUI">
+    <div class="camera-fs-close" onclick="closeCamera()">✕</div>
+    <div class="camera-fs-filename" id="cameraFsFilename"></div>
+    <div class="camera-fs-live-badge" id="liveBadge">● LIVE</div>
+
+    <div class="camera-fs-zoom-bar">
+      <div class="camera-fs-zoom-btn active" id="zoom1x" onclick="setZoom(1)">1×</div>
+      <div class="camera-fs-zoom-btn" id="zoom2x" onclick="setZoom(2)">2×</div>
     </div>
-    <div class="camera-fs-flash" id="fsFlashBtn" onclick="toggleFsFlash()">
-      <span class="camera-fs-flash-icon">⚡</span>
-      <span id="fsFlashLabel">閃光燈</span>
+
+    <div class="camera-fs-bar">
+      <div style="width:60px"></div>
+      <div class="camera-fs-shutter" id="cameraShutter" onclick="capturePhoto()">
+        <div class="camera-fs-shutter-inner"></div>
+      </div>
+      <div class="camera-fs-flash" id="fsFlashBtn" onclick="toggleFsFlash()">
+        <span class="camera-fs-flash-icon">⚡</span>
+        <span id="fsFlashLabel">閃光燈</span>
+      </div>
     </div>
   </div>
 </div>
-<div class="camera-flash-overlay" id="flashOverlay"></div>
 
 <!-- ═══ FILES ═══ -->
 <div class="panel" id="panel-files">
@@ -1063,6 +1082,49 @@ function updatePhotoPanel() {
   document.getElementById('photoFilenameBar').textContent = buildPrefix();
 }
 
+// ═══════════════════════════════════════
+// CAMERA ORIENTATION
+// ═══════════════════════════════════════
+function updateCameraOrientation() {
+  const ui = document.getElementById('cameraUI');
+  if (!ui) return;
+  let angle = 0;
+  // screen.orientation is most reliable on modern browsers
+  if (screen.orientation && screen.orientation.angle !== undefined) {
+    angle = screen.orientation.angle;
+  } else if (typeof window.orientation === 'number') {
+    angle = window.orientation;
+  }
+  ui.classList.remove('portrait','landscape-left','landscape-right');
+  if (angle === 0 || angle === 180) {
+    ui.classList.add('portrait');
+  } else if (angle === 90) {
+    // Device rotated left (landscape-right on screen)
+    ui.classList.add('landscape-right');
+  } else {
+    // angle === -90 or 270 — device rotated right (landscape-left on screen)
+    ui.classList.add('landscape-left');
+  }
+}
+
+// ═══════════════════════════════════════
+// VOLUME KEY SHUTTER
+// ═══════════════════════════════════════
+function _onVolumeKey(e) {
+  // Only active when camera is open
+  if (!document.getElementById('cameraFullscreen').classList.contains('show')) return;
+  if (e.key === 'VolumeUp' || e.key === 'VolumeDown' ||
+      e.code === 'VolumeUp' || e.code === 'VolumeDown') {
+    e.preventDefault();
+    e.stopPropagation();
+    // Visual feedback on shutter button
+    const btn = document.getElementById('cameraShutter');
+    btn.classList.add('vol-flash');
+    setTimeout(() => btn.classList.remove('vol-flash'), 200);
+    capturePhoto();
+  }
+}
+
 async function startCamera() {
   try {
     if (S.camera.stream) S.camera.stream.getTracks().forEach(t => t.stop());
@@ -1098,6 +1160,15 @@ async function startCamera() {
     liveBadge.style.display = S.camera.liveSupported ? 'block' : 'none';
 
     document.getElementById('cameraFullscreen').classList.add('show');
+
+    // Orientation tracking
+    updateCameraOrientation();
+    window.addEventListener('orientationchange', updateCameraOrientation);
+    if (screen.orientation) screen.orientation.addEventListener('change', updateCameraOrientation);
+
+    // Volume key shutter
+    window.addEventListener('keydown', _onVolumeKey, { capture: true });
+
     showToast(S.camera.liveSupported ? '📷 已就緒（支持 Live Photo）' : '📷 相機已就緒');
   } catch(e) {
     showToast('❌ 無法訪問相機：' + e.message);
@@ -1109,6 +1180,11 @@ function closeCamera() {
   S.camera.stream = null;
   document.getElementById('preview-video').style.transform = '';
   document.getElementById('cameraFullscreen').classList.remove('show');
+
+  // Remove orientation + volume listeners
+  window.removeEventListener('orientationchange', updateCameraOrientation);
+  if (screen.orientation) screen.orientation.removeEventListener('change', updateCameraOrientation);
+  window.removeEventListener('keydown', _onVolumeKey, { capture: true });
 }
 
 async function setZoom(level) {
