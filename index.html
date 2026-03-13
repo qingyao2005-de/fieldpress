@@ -134,11 +134,13 @@ input:checked + .toggle-slider:before { transform:translateX(20px); }
 
 /* FULLSCREEN CAMERA */
 .camera-fullscreen {
-  display:none; position:fixed; inset:0; background:#000; z-index:500;
+  display:none; position:fixed; top:0; left:0; right:0; bottom:0;
+  background:#000; z-index:500; overflow:hidden;
 }
 .camera-fullscreen.show { display:block; }
 .camera-fs-video {
-  position:absolute; inset:0; width:100%; height:100%; object-fit:cover;
+  position:absolute; top:0; left:0; right:0; bottom:0;
+  width:100%; height:100%; object-fit:cover; z-index:1;
 }
 .camera-fs-bar {
   position:absolute; bottom:0; left:0; right:0;
@@ -179,10 +181,27 @@ input:checked + .toggle-slider:before { transform:translateX(20px); }
   text-shadow:0 1px 3px rgba(0,0,0,0.8);
 }
 .camera-fs-live-badge {
-  position:absolute; top:16px; right:16px; z-index:11;
+  position:absolute; top:16px; right:16px; z-index:10;
   background:rgba(255,180,0,0.85); color:#000;
   font-size:10px; font-weight:700; font-family:'IBM Plex Mono',monospace;
   padding:4px 10px; border-radius:20px; display:none;
+}
+.camera-fs-zoom-bar {
+  position:absolute; bottom:130px; left:0; right:0;
+  display:flex; align-items:center; justify-content:center; gap:10px; z-index:10;
+}
+.camera-fs-zoom-btn {
+  width:44px; height:44px; border-radius:50%;
+  background:rgba(0,0,0,0.45); backdrop-filter:blur(6px);
+  border:1.5px solid rgba(255,255,255,0.3);
+  color:rgba(255,255,255,0.8); font-size:13px; font-weight:700;
+  font-family:'IBM Plex Mono',monospace;
+  display:flex; align-items:center; justify-content:center;
+  cursor:pointer; transition:all 0.18s;
+}
+.camera-fs-zoom-btn.active {
+  background:rgba(255,200,0,0.85); color:#000;
+  border-color:transparent; transform:scale(1.12);
 }
 .camera-flash-overlay {
   display:none; position:fixed; inset:0; background:white; z-index:600; pointer-events:none;
@@ -404,10 +423,15 @@ canvas { display:none; }
 
 <!-- FULLSCREEN CAMERA OVERLAY -->
 <div class="camera-fullscreen" id="cameraFullscreen">
-  <video id="preview-video" autoplay playsinline class="camera-fs-video"></video>
+  <video id="preview-video" autoplay playsinline muted class="camera-fs-video"></video>
   <div class="camera-fs-close" onclick="closeCamera()">✕</div>
   <div class="camera-fs-filename" id="cameraFsFilename"></div>
   <div class="camera-fs-live-badge" id="liveBadge">● LIVE</div>
+  <!-- Zoom selector -->
+  <div class="camera-fs-zoom-bar">
+    <div class="camera-fs-zoom-btn active" id="zoom1x" onclick="setZoom(1)">1×</div>
+    <div class="camera-fs-zoom-btn" id="zoom2x" onclick="setZoom(2)">2×</div>
+  </div>
   <div class="camera-fs-bar">
     <div style="width:60px"></div>
     <div class="camera-fs-shutter" onclick="capturePhoto()">
@@ -1047,8 +1071,14 @@ async function startCamera() {
     });
     const video = document.getElementById('preview-video');
     video.srcObject = S.camera.stream;
+    video.play().catch(()=>{});
     document.getElementById('cameraFsFilename').textContent = buildPrefix() + '-' + (S.photoCount+1) + '.jpg';
     updateFsFlashUI();
+    // Reset zoom to 1x
+    S.camera.zoom = 1;
+    document.getElementById('zoom1x').classList.add('active');
+    document.getElementById('zoom2x').classList.remove('active');
+    document.getElementById('preview-video').style.transform = '';
 
     // Detect Live Photo support (iOS 17+ with ImageCapture API)
     S.camera.liveSupported = false;
@@ -1077,7 +1107,56 @@ async function startCamera() {
 function closeCamera() {
   if (S.camera.stream) S.camera.stream.getTracks().forEach(t => t.stop());
   S.camera.stream = null;
+  document.getElementById('preview-video').style.transform = '';
   document.getElementById('cameraFullscreen').classList.remove('show');
+}
+
+async function setZoom(level) {
+  S.camera.zoom = level;
+  // Update UI
+  document.getElementById('zoom1x').classList.toggle('active', level === 1);
+  document.getElementById('zoom2x').classList.toggle('active', level === 2);
+
+  if (!S.camera.stream) return;
+  const track = S.camera.stream.getVideoTracks()[0];
+  if (!track) return;
+
+  // Method 1: use zoom constraint (Android Chrome + some browsers)
+  const caps = track.getCapabilities ? track.getCapabilities() : {};
+  if (caps.zoom) {
+    const minZ = caps.zoom.min || 1;
+    const maxZ = caps.zoom.max || 4;
+    const targetZ = level === 2 ? Math.min(2, maxZ) : minZ;
+    try {
+      await track.applyConstraints({ advanced: [{ zoom: targetZ }] });
+      showToast(level + '× 鏡頭');
+      return;
+    } catch(e) {}
+  }
+
+  // Method 2: restart stream with different facingMode/zoom hint (iOS workaround)
+  // On iPhone, zoom:2 maps to the telephoto lens via re-requesting the stream
+  try {
+    const newStream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: 'environment',
+        zoom: level === 2 ? 2.0 : 1.0
+      }
+    });
+    // If we got here, the new stream works
+    S.camera.stream.getTracks().forEach(t => t.stop());
+    S.camera.stream = newStream;
+    const video = document.getElementById('preview-video');
+    video.srcObject = newStream;
+    video.play().catch(()=>{});
+    showToast(level + '× 鏡頭');
+  } catch(e) {
+    // Fallback: CSS scale simulation for 2x
+    const video = document.getElementById('preview-video');
+    video.style.transform = level === 2 ? 'scale(2)' : 'scale(1)';
+    video.style.transformOrigin = 'center center';
+    showToast(level + '× （模擬縮放）');
+  }
 }
 
 function toggleFsFlash() {
